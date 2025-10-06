@@ -4873,8 +4873,7 @@ void runTestsInDirectory(TestContext* context)
     {
         SlangPathType pathType;
         if (SLANG_SUCCEEDED(Path::getPathType(rawPath, &pathType)) &&
-            pathType == SLANG_PATH_TYPE_FILE &&
-            endsWithAllowedExtension(context, rawPath))
+            pathType == SLANG_PATH_TYPE_FILE && endsWithAllowedExtension(context, rawPath))
         {
             explicitFiles.add(rawPath);
         }
@@ -4886,8 +4885,7 @@ void runTestsInDirectory(TestContext* context)
     for (const auto& rawPath : context->options.rawTestPaths)
     {
         SlangPathType pathType;
-        if (SLANG_FAILED(Path::getPathType(rawPath, &pathType)) ||
-            pathType != SLANG_PATH_TYPE_FILE)
+        if (SLANG_FAILED(Path::getPathType(rawPath, &pathType)) || pathType != SLANG_PATH_TYPE_FILE)
         {
             hasNonFilePrefix = true;
             break;
