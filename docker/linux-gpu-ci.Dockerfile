@@ -44,7 +44,6 @@ RUN apt-get update && apt-get install -y \
     libxi-dev \
     libgl1-mesa-dev \
     libvulkan-dev \
-    vulkan-validationlayers \
     spirv-tools \
     glslang-tools \
     && rm -rf /var/lib/apt/lists/*
