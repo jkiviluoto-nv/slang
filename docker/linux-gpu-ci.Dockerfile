@@ -1,7 +1,7 @@
 # Linux GPU CI Container Image
 #
 # Base image with CUDA 12.5.1 for GPU testing on self-hosted runners
-# Requires driver 555.42.02 or newer
+# Requires driver 590.48.01 or newer (for Vulkan SDK 1.4.321.0 compatibility)
 #
 # Used by:
 # - .github/workflows/ci-slang-build-container.yml
@@ -48,12 +48,15 @@ RUN apt-get update && apt-get install -y \
     glslang-tools \
     && rm -rf /var/lib/apt/lists/*
 
-# Install newer Vulkan validation layers from LunarG
-RUN wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key add - && \
-    wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list && \
-    apt-get update && \
-    apt-get install -y vulkan-validationlayers && \
-    rm -rf /var/lib/apt/lists/*
+# Install Vulkan SDK 1.4.321.1 from tarball (apt packages discontinued after 1.4.313)
+# Using tarball to get the fixed validation layers that resolve cooperative vector issues
+RUN wget -q https://sdk.lunarg.com/sdk/download/1.4.321.1/linux/vulkansdk-linux-x86_64-1.4.321.1.tar.xz && \
+    tar -xf vulkansdk-linux-x86_64-1.4.321.1.tar.xz && \
+    cp -r 1.4.321.1/x86_64/lib/* /usr/local/lib/ && \
+    cp -r 1.4.321.1/x86_64/share/vulkan /usr/share/ && \
+    cp -r 1.4.321.1/x86_64/bin/* /usr/local/bin/ && \
+    ldconfig && \
+    rm -rf vulkansdk-linux-x86_64-1.4.321.1.tar.xz 1.4.321.1
 
 # Install runtime libraries for test execution
 RUN apt-get update && apt-get install -y \
