@@ -12,7 +12,7 @@ A tool to analyze GitHub Actions workflow runs and identify parallelization bott
 
 ## Installation
 
-No installation required! Just download the script and run it with Python 3.6+.
+No installation required! Just download the script and run it with Python 3.7+.
 
 ```bash
 # Make it executable
@@ -26,20 +26,20 @@ chmod +x analyze-ci-parallelization.py
 Pipe GitHub Actions job data directly from `gh` CLI:
 
 ```bash
-gh api repos/OWNER/REPO/actions/runs/RUN_ID/jobs | python3 analyze-ci-parallelization.py
+gh api --paginate repos/OWNER/REPO/actions/runs/RUN_ID/jobs | python3 analyze-ci-parallelization.py
 ```
 
 **Example:**
 
 ```bash
-gh api repos/shader-slang/slang/actions/runs/21618930965/jobs | python3 analyze-ci-parallelization.py
+gh api --paginate repos/shader-slang/slang/actions/runs/21618930965/jobs | python3 analyze-ci-parallelization.py
 ```
 
 ### Alternative: Save to File First
 
 ```bash
 # Save jobs data
-gh api repos/shader-slang/slang/actions/runs/21618930965/jobs > jobs.json
+gh api --paginate repos/shader-slang/slang/actions/runs/21618930965/jobs > jobs.json
 
 # Analyze the saved file
 python3 analyze-ci-parallelization.py jobs.json
@@ -181,7 +181,7 @@ Review `needs:` clauses in your workflow:
 ## Example Analysis
 
 ```bash
-$ gh api repos/shader-slang/slang/actions/runs/21618930965/jobs | python3 analyze-ci-parallelization.py
+$ gh api --paginate repos/shader-slang/slang/actions/runs/21618930965/jobs | python3 analyze-ci-parallelization.py
 
 ====================================================================================================
 CI RUN PARALLELIZATION ANALYSIS
@@ -213,7 +213,7 @@ OPTIMIZATION RECOMMENDATIONS
 
 ## Requirements
 
-- Python 3.6 or later
+- Python 3.7 or later
 - GitHub CLI (`gh`) for fetching workflow data
 - No additional Python packages required (uses only stdlib)
 

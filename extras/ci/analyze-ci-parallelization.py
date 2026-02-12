@@ -3,15 +3,18 @@
 Analyze GitHub Actions CI run parallelization bottlenecks.
 
 Usage:
-    # Using gh CLI directly (recommended)
-    gh api repos/OWNER/REPO/actions/runs/RUN_ID/jobs | python3 analyze-ci-parallelization.py
+    # Using gh CLI directly (recommended - use --paginate for workflows with >30 jobs)
+    gh api --paginate repos/OWNER/REPO/actions/runs/RUN_ID/jobs | python3 analyze-ci-parallelization.py
 
     # Or save jobs data to file first
-    gh api repos/OWNER/REPO/actions/runs/RUN_ID/jobs > jobs.json
+    gh api --paginate repos/OWNER/REPO/actions/runs/RUN_ID/jobs > jobs.json
     python3 analyze-ci-parallelization.py jobs.json
 
     # Example
-    gh api repos/shader-slang/slang/actions/runs/21618930965/jobs | python3 analyze-ci-parallelization.py
+    gh api --paginate repos/shader-slang/slang/actions/runs/21618930965/jobs | python3 analyze-ci-parallelization.py
+
+Note: The GitHub API returns at most 30 jobs per page. Without --paginate, workflows
+with more than 30 jobs will have incomplete results. Always use --paginate.
 """
 
 import json
@@ -124,17 +127,31 @@ def analyze_job_chains(jobs: List[Dict[str, Any]], workflow_start: datetime) -> 
 
         platform_jobs.sort(key=lambda x: x["start_time"])
         total_work = sum(j["duration_min"] for j in platform_jobs)
-        elapsed = (platform_jobs[-1]["end_time"] - platform_jobs[0]["start_time"]).total_seconds() / 60
+        chain_start = platform_jobs[0]["start_time"]
+        chain_end = platform_jobs[-1]["end_time"]
+        elapsed = (chain_end - chain_start).total_seconds() / 60
 
-        # Calculate potential parallelization opportunity
-        if elapsed > total_work:
-            gap = elapsed - total_work
-            print(f"\n{platform}:")
-            print(f"  Jobs: {len(platform_jobs)}, Total work: {total_work:.1f} min, Elapsed: {elapsed:.1f} min")
-            print(f"  🔍 Gap: {gap:.1f} min (potential wait time)")
-        else:
-            print(f"\n{platform}:")
-            print(f"  Jobs: {len(platform_jobs)}, Total work: {total_work:.1f} min, Elapsed: {elapsed:.1f} min")
+        # Calculate actual idle time by finding gaps in the union of busy intervals.
+        # This correctly handles overlapping parallel sub-jobs.
+        intervals = sorted(
+            (j["start_time"], j["end_time"]) for j in platform_jobs
+        )
+        merged = [intervals[0]]
+        for start, end in intervals[1:]:
+            if start <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+            else:
+                merged.append((start, end))
+
+        busy_time = sum(
+            (end - start).total_seconds() / 60 for start, end in merged
+        )
+        idle_time = elapsed - busy_time
+
+        print(f"\n{platform}:")
+        print(f"  Jobs: {len(platform_jobs)}, Total work: {total_work:.1f} min, Elapsed: {elapsed:.1f} min")
+        if idle_time > 0.5:
+            print(f"  🔍 Idle: {idle_time:.1f} min (wait time between stages)")
 
         for job in platform_jobs:
             rel_start = (job["start_time"] - workflow_start).total_seconds() / 60
@@ -242,7 +259,7 @@ def provide_recommendations(jobs: List[Dict[str, Any]], total_duration: float, t
     for job in jobs:
         runners[job["runner_name"]].append(job)
 
-    busy_runners = [r for r, jobs in runners.items() if len(jobs) >= 3]
+    busy_runners = [r for r, rjobs in runners.items() if len(rjobs) >= 3]
     if busy_runners:
         print(f"\n🔧 RUNNER BOTTLENECKS ({len(busy_runners)} runners with 3+ sequential jobs)")
         for runner in busy_runners:
@@ -258,9 +275,18 @@ def main():
     """Main entry point."""
     # Read input from stdin or file
     if len(sys.argv) > 1:
-        # Read from file
-        with open(sys.argv[1], 'r') as f:
-            data = json.load(f)
+        try:
+            with open(sys.argv[1], 'r') as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            print(f"Error: File not found: {sys.argv[1]}", file=sys.stderr)
+            sys.exit(1)
+        except PermissionError:
+            print(f"Error: Permission denied: {sys.argv[1]}", file=sys.stderr)
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON in {sys.argv[1]}: {e}", file=sys.stderr)
+            sys.exit(1)
     else:
         # Read from stdin
         try:
@@ -273,6 +299,13 @@ def main():
     # Handle different input formats
     if isinstance(data, dict) and "jobs" in data:
         jobs_data = data["jobs"]
+        total_count = data.get("total_count")
+        if total_count is not None and total_count > len(jobs_data):
+            print(
+                f"Warning: API returned {len(jobs_data)} of {total_count} jobs. "
+                f"Use 'gh api --paginate' to fetch all jobs.",
+                file=sys.stderr,
+            )
     elif isinstance(data, list):
         jobs_data = data
     else:
