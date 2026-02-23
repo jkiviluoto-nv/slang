@@ -121,7 +121,13 @@ def analyze_workflow(jobs: List[Dict[str, Any]]) -> None:
     print(f"End: {workflow_end.strftime('%Y-%m-%d %H:%M:%S UTC')}")
     print(f"\nTotal Jobs: {len(jobs)}")
     print(f"Total CPU Time: {total_cpu_time:.1f} minutes")
-    print(f"Parallelization Efficiency: {(total_cpu_time / total_duration):.1f}x")
+    if total_duration > 0:
+        efficiency = total_cpu_time / total_duration
+        efficiency_str = f"{efficiency:.1f}x"
+    else:
+        efficiency = None
+        efficiency_str = "N/A"
+    print(f"Parallelization Efficiency: {efficiency_str}")
 
     # Check for failed jobs
     failed_jobs = [j for j in jobs if j["conclusion"] not in ("success", "skipped")]
@@ -273,10 +279,15 @@ def provide_recommendations(jobs: List[Dict[str, Any]], total_duration: float, t
     print("OPTIMIZATION RECOMMENDATIONS")
     print("=" * 100)
 
-    parallelization_efficiency = total_cpu_time / total_duration
+    parallelization_efficiency = None
+    if total_duration > 0:
+        parallelization_efficiency = total_cpu_time / total_duration
 
     # Check overall efficiency
-    if parallelization_efficiency < 5:
+    if parallelization_efficiency is None:
+        print("\n⚪ PARALLELIZATION EFFICIENCY UNAVAILABLE")
+        print("   Workflow duration is zero; cannot compute efficiency.")
+    elif parallelization_efficiency < 5:
         print("\n🔴 LOW PARALLELIZATION EFFICIENCY")
         print(f"   Current: {parallelization_efficiency:.1f}x")
         print(f"   Many jobs are running sequentially. Consider:")
