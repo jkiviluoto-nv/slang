@@ -1,6 +1,19 @@
-# CI Parallelization Analyzer
+# CI Analysis Tools
 
-A tool to analyze GitHub Actions workflow runs and identify parallelization bottlenecks.
+Tools for analyzing GitHub Actions CI performance and queue status.
+
+## Scripts
+
+| Script                          | Purpose                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------- |
+| `analyze-ci-parallelization.py` | Analyze a completed CI run's parallelization and bottlenecks              |
+| `ci-queue-status.py`            | Live snapshot of the current CI queue, runner utilization, and wait times |
+
+---
+
+# analyze-ci-parallelization.py
+
+Analyze a completed GitHub Actions workflow run and identify parallelization bottlenecks.
 
 ## Features
 
@@ -217,10 +230,54 @@ OPTIMIZATION RECOMMENDATIONS
 - GitHub CLI (`gh`) for fetching workflow data
 - No additional Python packages required (uses only stdlib)
 
-## License
+---
 
-Free to use and modify for analyzing CI workflows.
+# ci-queue-status.py
 
-## Contributing
+Live snapshot of the current CI queue. Shows what's waiting, what's running, and where
+the self-hosted runner bottlenecks are. Uses the same GitHub API endpoints that
+[CREMA/KEDA's GitHub runner scaler](https://keda.sh/docs/2.17/scalers/github-runner/)
+uses for auto-scaling decisions.
 
-Suggestions and improvements welcome! This tool analyzes any GitHub Actions workflow.
+## Usage
+
+```bash
+# Check queue for shader-slang/slang (default)
+python3 ci-queue-status.py
+
+# Check a different repo
+python3 ci-queue-status.py --repo OWNER/REPO
+
+# Show more waiting jobs
+python3 ci-queue-status.py --top-waiting 30
+```
+
+## Output Sections
+
+1. **Snapshot Summary** - Counts of queued/in-progress runs and jobs
+2. **Queue Depth by Runner Group** - Jobs queued vs running per runner label group, with
+   available self-hosted runner counts
+3. **Longest-Waiting Queued Jobs** - Top N jobs sorted by wait time (only jobs truly waiting
+   for a runner, not blocked by workflow dependencies)
+4. **In-Progress Runs** - Active runs with branch, workflow, age, and actor
+5. **Self-Hosted Runner Status** - Each runner's online/busy state and current job
+
+## Runner Label Groups
+
+The script classifies jobs into groups based on their `runs-on` labels. The groups are
+configured as a constant at the top of the script (`LABEL_GROUPS`) and can be adjusted
+for other repositories.
+
+## Permissions Note
+
+The self-hosted runner status section requires admin access to the repository's runners
+endpoint (`/repos/{repo}/actions/runners`). If access is denied, the section is skipped
+with a warning. All other sections work without admin access.
+
+---
+
+## Requirements (both scripts)
+
+- Python 3.7 or later
+- GitHub CLI (`gh`) for fetching workflow data
+- No additional Python packages required (uses only stdlib)
