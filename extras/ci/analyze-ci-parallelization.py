@@ -6,6 +6,9 @@ Usage:
     # Using gh CLI directly (recommended - use --paginate for workflows with >30 jobs)
     gh api --paginate repos/OWNER/REPO/actions/runs/RUN_ID/jobs | python3 analyze-ci-parallelization.py
 
+    # Or use --paginate with --jq to stream jobs directly
+    gh api --paginate --jq '.jobs[]' repos/OWNER/REPO/actions/runs/RUN_ID/jobs | python3 analyze-ci-parallelization.py
+
     # Or save jobs data to file first
     gh api --paginate repos/OWNER/REPO/actions/runs/RUN_ID/jobs > jobs.json
     python3 analyze-ci-parallelization.py jobs.json
@@ -15,6 +18,7 @@ Usage:
 
 Note: The GitHub API returns at most 30 jobs per page. Without --paginate, workflows
 with more than 30 jobs will have incomplete results. Always use --paginate.
+Paginated output is now handled directly when piped to stdin.
 """
 
 import json
@@ -53,6 +57,48 @@ def parse_jobs(jobs_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         })
 
     return parsed_jobs
+
+
+def _parse_json_stream(payload: str):
+    """Parse concatenated JSON objects from gh --paginate output."""
+    decoder = json.JSONDecoder()
+    idx = 0
+    length = len(payload)
+    while True:
+        while idx < length and payload[idx].isspace():
+            idx += 1
+        if idx >= length:
+            break
+        obj, idx = decoder.raw_decode(payload, idx)
+        yield obj
+
+
+def _coerce_jobs_data(data: Any) -> List[Dict[str, Any]]:
+    """Normalize various input formats into a flat jobs list."""
+    if isinstance(data, dict) and "jobs" in data:
+        return data["jobs"]
+    if isinstance(data, list):
+        return data
+    return []
+
+
+def _load_paginated_stdin() -> List[Dict[str, Any]]:
+    """Read stdin and handle gh --paginate concatenated JSON output."""
+    payload = sys.stdin.read()
+    if not payload.strip():
+        return []
+
+    jobs_data: List[Dict[str, Any]] = []
+    try:
+        # Fast path: valid JSON (single object or array)
+        data = json.loads(payload)
+        jobs_data = _coerce_jobs_data(data)
+        return jobs_data
+    except json.JSONDecodeError:
+        # Slow path: concatenated JSON objects from --paginate
+        for obj in _parse_json_stream(payload):
+            jobs_data.extend(_coerce_jobs_data(obj))
+        return jobs_data
 
 
 def analyze_workflow(jobs: List[Dict[str, Any]]) -> None:
@@ -288,29 +334,28 @@ def main():
             print(f"Error: Invalid JSON in {sys.argv[1]}: {e}", file=sys.stderr)
             sys.exit(1)
     else:
-        # Read from stdin
-        try:
-            data = json.load(sys.stdin)
-        except json.JSONDecodeError as e:
-            print(f"Error: Invalid JSON input: {e}", file=sys.stderr)
+        jobs_data = _load_paginated_stdin()
+        if not jobs_data:
+            print("Error: Invalid or empty JSON input", file=sys.stderr)
             print(__doc__, file=sys.stderr)
             sys.exit(1)
 
-    # Handle different input formats
-    if isinstance(data, dict) and "jobs" in data:
-        jobs_data = data["jobs"]
-        total_count = data.get("total_count")
-        if total_count is not None and total_count > len(jobs_data):
-            print(
-                f"Warning: API returned {len(jobs_data)} of {total_count} jobs. "
-                f"Use 'gh api --paginate' to fetch all jobs.",
-                file=sys.stderr,
-            )
-    elif isinstance(data, list):
-        jobs_data = data
-    else:
-        print("Error: Expected JSON with 'jobs' array or array of jobs", file=sys.stderr)
-        sys.exit(1)
+    # Handle different input formats (file input only)
+    if len(sys.argv) > 1:
+        if isinstance(data, dict) and "jobs" in data:
+            jobs_data = data["jobs"]
+            total_count = data.get("total_count")
+            if total_count is not None and total_count > len(jobs_data):
+                print(
+                    f"Warning: API returned {len(jobs_data)} of {total_count} jobs. "
+                    f"Use 'gh api --paginate' to fetch all jobs.",
+                    file=sys.stderr,
+                )
+        elif isinstance(data, list):
+            jobs_data = data
+        else:
+            print("Error: Expected JSON with 'jobs' array or array of jobs", file=sys.stderr)
+            sys.exit(1)
 
     # Parse and analyze
     jobs = parse_jobs(jobs_data)
