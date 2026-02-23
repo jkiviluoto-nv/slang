@@ -56,9 +56,9 @@ jobs:
             /host_root/usr/local/lib/heroku \
           ; do
             if [ -d "$dir" ]; then
-              size=$(du -sh "$dir" 2>/dev/null | cut -f1)
+              size=$(du -sh "$dir" 2>/dev/null | cut -f1 || echo "unknown")
               echo "Removing $dir ($size)..."
-              rm -rf "$dir"
+              rm -rf "$dir" || true
             fi
           done
           echo "=== Disk space after cleanup ==="
