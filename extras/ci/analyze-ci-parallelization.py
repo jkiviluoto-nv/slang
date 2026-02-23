@@ -132,7 +132,7 @@ def analyze_workflow(jobs: List[Dict[str, Any]]) -> None:
     # Check for failed jobs
     failed_jobs = [j for j in jobs if j["conclusion"] not in ("success", "skipped")]
     if failed_jobs:
-        print(f"\n⚠️  Failed Jobs: {len(failed_jobs)}")
+        print(f"\nWARNING: Failed Jobs: {len(failed_jobs)}")
         for job in failed_jobs:
             print(f"   - {job['name']} ({job['conclusion']})")
 
@@ -142,7 +142,7 @@ def analyze_workflow(jobs: List[Dict[str, Any]]) -> None:
     print("=" * 100)
     sorted_by_duration = sorted(jobs, key=lambda x: x["duration_min"], reverse=True)
     for i, job in enumerate(sorted_by_duration[:10], 1):
-        status = "✓" if job["conclusion"] == "success" else "✗"
+        status = "OK" if job["conclusion"] == "success" else "FAIL"
         print(f"{status} {i:2d}. {job['name']:60s} {job['duration_min']:6.1f} min")
 
     # Analyze job dependencies by grouping related jobs
@@ -203,12 +203,12 @@ def analyze_job_chains(jobs: List[Dict[str, Any]], workflow_start: datetime) -> 
         print(f"\n{platform}:")
         print(f"  Jobs: {len(platform_jobs)}, Total work: {total_work:.1f} min, Elapsed: {elapsed:.1f} min")
         if idle_time > 0.5:
-            print(f"  🔍 Idle: {idle_time:.1f} min (wait time between stages)")
+            print(f"  Idle: {idle_time:.1f} min (wait time between stages)")
 
         for job in platform_jobs:
             rel_start = (job["start_time"] - workflow_start).total_seconds() / 60
             stage = job["name"].split(" / ")[-1] if " / " in job["name"] else job["name"]
-            status = "✓" if job["conclusion"] == "success" else "✗"
+            status = "OK" if job["conclusion"] == "success" else "FAIL"
             print(f"    {status} +{rel_start:5.1f}m: {stage:40s} ({job['duration_min']:5.1f}m)")
 
 
@@ -265,11 +265,11 @@ def analyze_runner_utilization(jobs: List[Dict[str, Any]], workflow_start: datet
         print(f"  Jobs: {len(runner_jobs)}, Total work: {total_work:.1f} min, Idle: {idle_time:.1f} min, Utilization: {utilization:.0f}%")
 
         if len(runner_jobs) > 3:
-            print(f"  ⚠️  Runner handles {len(runner_jobs)} sequential jobs - potential bottleneck")
+            print(f"  WARNING: Runner handles {len(runner_jobs)} sequential jobs - potential bottleneck")
 
         for job in runner_jobs:
             rel_start = (job["start_time"] - workflow_start).total_seconds() / 60
-            status = "✓" if job["conclusion"] == "success" else "✗"
+            status = "OK" if job["conclusion"] == "success" else "FAIL"
             print(f"    {status} +{rel_start:5.1f}m: {job['name']:55s} ({job['duration_min']:5.1f}m)")
 
 
@@ -285,28 +285,28 @@ def provide_recommendations(jobs: List[Dict[str, Any]], total_duration: float, t
 
     # Check overall efficiency
     if parallelization_efficiency is None:
-        print("\n⚪ PARALLELIZATION EFFICIENCY UNAVAILABLE")
+        print("\nPARALLELIZATION EFFICIENCY UNAVAILABLE")
         print("   Workflow duration is zero; cannot compute efficiency.")
     elif parallelization_efficiency < 5:
-        print("\n🔴 LOW PARALLELIZATION EFFICIENCY")
+        print("\nLOW PARALLELIZATION EFFICIENCY")
         print(f"   Current: {parallelization_efficiency:.1f}x")
         print(f"   Many jobs are running sequentially. Consider:")
         print("   - Reviewing job dependencies to allow more parallel execution")
         print("   - Adding more runners to handle parallel workloads")
     elif parallelization_efficiency < 10:
-        print("\n🟡 MODERATE PARALLELIZATION EFFICIENCY")
+        print("\nMODERATE PARALLELIZATION EFFICIENCY")
         print(f"   Current: {parallelization_efficiency:.1f}x")
         print("   Some optimization possible. Consider:")
         print("   - Identifying sequential bottlenecks")
         print("   - Splitting long-running jobs")
     else:
-        print("\n🟢 GOOD PARALLELIZATION EFFICIENCY")
+        print("\nGOOD PARALLELIZATION EFFICIENCY")
         print(f"   Current: {parallelization_efficiency:.1f}x")
 
     # Identify long-running jobs
     long_jobs = [j for j in jobs if j["duration_min"] > 20]
     if long_jobs:
-        print(f"\n⏱️  LONG-RUNNING JOBS ({len(long_jobs)} jobs over 20 minutes)")
+        print(f"\nLONG-RUNNING JOBS ({len(long_jobs)} jobs over 20 minutes)")
         for job in sorted(long_jobs, key=lambda x: x["duration_min"], reverse=True):
             print(f"   - {job['name']}: {job['duration_min']:.1f} min")
         print("   Consider splitting these jobs or optimizing their workload")
@@ -318,7 +318,7 @@ def provide_recommendations(jobs: List[Dict[str, Any]], total_duration: float, t
 
     busy_runners = [r for r, rjobs in runners.items() if len(rjobs) >= 3]
     if busy_runners:
-        print(f"\n🔧 RUNNER BOTTLENECKS ({len(busy_runners)} runners with 3+ sequential jobs)")
+        print(f"\nRUNNER BOTTLENECKS ({len(busy_runners)} runners with 3+ sequential jobs)")
         for runner in busy_runners:
             job_count = len(runners[runner])
             total_work = sum(j["duration_min"] for j in runners[runner])
