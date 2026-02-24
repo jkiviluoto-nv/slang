@@ -22,10 +22,14 @@ Paginated output is now handled directly when piped to stdin.
 """
 
 import json
+import os
 import sys
 from datetime import datetime
 from typing import List, Dict, Any
 from collections import defaultdict
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from gh_api import load_paginated_stdin, coerce_jobs_data
 
 
 def parse_jobs(jobs_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -57,48 +61,6 @@ def parse_jobs(jobs_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         })
 
     return parsed_jobs
-
-
-def _parse_json_stream(payload: str):
-    """Parse concatenated JSON objects from gh --paginate output."""
-    decoder = json.JSONDecoder()
-    idx = 0
-    length = len(payload)
-    while True:
-        while idx < length and payload[idx].isspace():
-            idx += 1
-        if idx >= length:
-            break
-        obj, idx = decoder.raw_decode(payload, idx)
-        yield obj
-
-
-def _coerce_jobs_data(data: Any) -> List[Dict[str, Any]]:
-    """Normalize various input formats into a flat jobs list."""
-    if isinstance(data, dict) and "jobs" in data:
-        return data["jobs"]
-    if isinstance(data, list):
-        return data
-    return []
-
-
-def _load_paginated_stdin() -> List[Dict[str, Any]]:
-    """Read stdin and handle gh --paginate concatenated JSON output."""
-    payload = sys.stdin.read()
-    if not payload.strip():
-        return []
-
-    jobs_data: List[Dict[str, Any]] = []
-    try:
-        # Fast path: valid JSON (single object or array)
-        data = json.loads(payload)
-        jobs_data = _coerce_jobs_data(data)
-        return jobs_data
-    except json.JSONDecodeError:
-        # Slow path: concatenated JSON objects from --paginate
-        for obj in _parse_json_stream(payload):
-            jobs_data.extend(_coerce_jobs_data(obj))
-        return jobs_data
 
 
 def analyze_workflow(jobs: List[Dict[str, Any]]) -> None:
@@ -345,7 +307,7 @@ def main():
             print(f"Error: Invalid JSON in {sys.argv[1]}: {e}", file=sys.stderr)
             sys.exit(1)
     else:
-        jobs_data = _load_paginated_stdin()
+        jobs_data = load_paginated_stdin()
         if not jobs_data:
             print("Error: Invalid or empty JSON input", file=sys.stderr)
             print(__doc__, file=sys.stderr)

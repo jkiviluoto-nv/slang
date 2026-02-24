@@ -16,11 +16,14 @@ Requires: gh CLI (authenticated)
 
 import argparse
 import json
-import subprocess
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from collections import defaultdict
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from gh_api import gh_api, gh_api_list
 
 DEFAULT_REPO = "shader-slang/slang"
 DEFAULT_TOP_WAITING = 15
@@ -43,57 +46,6 @@ LABEL_GROUPS = [
     ({"macos-latest"}, "GitHub macOS", False),
     ({"windows-latest"}, "GitHub Windows", False),
 ]
-
-
-# --- gh API helpers ---
-
-
-def gh_api(endpoint):
-    """Call gh api and return parsed JSON."""
-    cmd = ["gh", "api"]
-    cmd.append(endpoint)
-
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        return None, result.stderr.strip()
-
-    try:
-        return json.loads(result.stdout), None
-    except json.JSONDecodeError as e:
-        return None, f"JSON parse error: {e}"
-
-
-def _parse_json_stream(payload):
-    """Parse concatenated JSON objects from gh --paginate output."""
-    decoder = json.JSONDecoder()
-    idx = 0
-    length = len(payload)
-    while True:
-        while idx < length and payload[idx].isspace():
-            idx += 1
-        if idx >= length:
-            break
-        obj, idx = decoder.raw_decode(payload, idx)
-        yield obj
-
-
-def gh_api_list(endpoint, key):
-    """Call gh api --paginate and return a merged list for a key."""
-    cmd = ["gh", "api", "--paginate", endpoint]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        return None, result.stderr.strip()
-
-    items = []
-    try:
-        for obj in _parse_json_stream(result.stdout):
-            if isinstance(obj, dict):
-                items.extend(obj.get(key, []))
-            elif isinstance(obj, list):
-                items.extend(obj)
-    except json.JSONDecodeError as e:
-        return None, f"JSON parse error: {e}"
-    return items, None
 
 
 def fetch_runs(repo, status):
