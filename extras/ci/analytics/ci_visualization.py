@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import datetime
+import html as html_mod
 import json
 import os
 import sys
@@ -845,12 +846,13 @@ def generate_month_page(month, month_jobs, config, output_dir):
         rows_html = []
         for ri, runner in enumerate(sorted_runners):
             top = 30 + ri * ROW_HEIGHT
+            runner_esc = html_mod.escape(runner)
             # Runner label
             rows_html.append(
                 f'<div style="position:absolute;left:0;top:{top}px;width:120px;height:{ROW_HEIGHT}px;'
                 f'font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;'
                 f'line-height:{ROW_HEIGHT}px;padding:0 4px;background:#f8f9fa;border-bottom:1px solid #eee;z-index:1" '
-                f'title="{runner}">{runner}</div>'
+                f'title="{runner_esc}">{runner_esc}</div>'
             )
 
             for job in runners_data[runner]:
@@ -866,12 +868,12 @@ def generate_month_page(month, month_jobs, config, output_dir):
 
                 conclusion = job.get("conclusion", "")
                 color = CONCLUSION_COLORS.get(conclusion, "#6c757d")
-                name = job.get("name", "")
-                wf = job.get("workflow_name", "")
-                branch = job.get("head_branch", "")
+                name = html_mod.escape(job.get("name", ""))
+                wf = html_mod.escape(job.get("workflow_name", ""))
+                branch = html_mod.escape(job.get("head_branch", ""))
                 dur = format_duration((completed - started).total_seconds())
                 queue = format_duration(job.get("queued_seconds"))
-                url = job.get("html_url", "")
+                url = html_mod.escape(job.get("html_url", ""), quote=True)
 
                 tooltip = f"{name}\\n{wf} / {branch}\\nDuration: {dur}, Queue: {queue}\\nConclusion: {conclusion}"
 
