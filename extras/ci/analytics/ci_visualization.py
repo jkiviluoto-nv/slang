@@ -810,24 +810,27 @@ def generate_month_page(month, month_jobs, config, output_dir):
         completed = parse_dt(job.get("completed_at"))
         if not started or not completed:
             continue
-        date_str = started.strftime("%Y-%m-%d")
         runner = job.get("runner_name") or "unknown"
         workflows.add(job.get("workflow_name", ""))
         branches.add(job.get("head_branch", ""))
-        days[date_str][runner].append(job)
+        if completed <= started:
+            continue
 
-        # Jobs crossing midnight: add a continuation entry on the next day
-        if started.date() != completed.date():
-            import datetime as _dt
-            next_day = (started + _dt.timedelta(days=1)).strftime("%Y-%m-%d")
-            next_midnight = _dt.datetime.combine(
-                started.date() + _dt.timedelta(days=1),
-                _dt.time.min,
-                tzinfo=started.tzinfo,
-            )
-            cont = dict(job)
-            cont["_cont_started_at"] = next_midnight.isoformat()
-            days[next_day][runner].append(cont)
+        # Split jobs into per-day segments to handle midnight spanning.
+        day_start = datetime.datetime.combine(
+            started.date(), datetime.time.min, tzinfo=started.tzinfo
+        )
+        while day_start < completed:
+            next_day = day_start + datetime.timedelta(days=1)
+            seg_start = max(started, day_start)
+            seg_end = min(completed, next_day)
+            if seg_end > seg_start:
+                date_str = day_start.strftime("%Y-%m-%d")
+                seg = dict(job)
+                seg["_seg_started_at"] = seg_start.isoformat()
+                seg["_seg_completed_at"] = seg_end.isoformat()
+                days[date_str][runner].append(seg)
+            day_start = next_day
 
     sorted_dates = sorted(days.keys())
 
@@ -852,15 +855,13 @@ def generate_month_page(month, month_jobs, config, output_dir):
             )
 
             for job in runners_data[runner]:
-                # Use continuation start if this is a midnight-spanning entry
-                cont_start = job.get("_cont_started_at")
-                started = parse_dt(cont_start) if cont_start else parse_dt(job["started_at"])
-                completed = parse_dt(job["completed_at"])
+                seg_start = job.get("_seg_started_at")
+                seg_end = job.get("_seg_completed_at")
+                started = parse_dt(seg_start) if seg_start else parse_dt(job["started_at"])
+                completed = parse_dt(seg_end) if seg_end else parse_dt(job["completed_at"])
                 # Position in pixels from midnight UTC
                 start_hour = started.hour + started.minute / 60 + started.second / 3600
                 dur_hours = (completed - started).total_seconds() / 3600
-                # Clamp to 24h boundary
-                dur_hours = min(dur_hours, 24 - start_hour)
                 left = 120 + int(start_hour * PIXELS_PER_HOUR)
                 width = max(int(dur_hours * PIXELS_PER_HOUR), 3)
 
@@ -869,7 +870,7 @@ def generate_month_page(month, month_jobs, config, output_dir):
                 name = job.get("name", "")
                 wf = job.get("workflow_name", "")
                 branch = job.get("head_branch", "")
-                dur = format_duration(job.get("duration_seconds"))
+                dur = format_duration((completed - started).total_seconds())
                 queue = format_duration(job.get("queued_seconds"))
                 url = job.get("html_url", "")
 
