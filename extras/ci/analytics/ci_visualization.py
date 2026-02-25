@@ -688,7 +688,7 @@ makeChart('buildByOs_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
     datasets: [{','.join(
-      f"""{{label:'{os_name}', data:sliceData({json.dumps(os_phase_avg_by_date.get(f'{os_name}_build', [0]*len(dates)))},30), _allData:{json.dumps(os_phase_avg_by_date.get(f'{os_name}_build', [0]*len(dates)))}, borderColor:'{["#0d6efd","#28a745","#ffc107","#dc3545","#6f42c1"][i % 5]}', fill:false, tension:0.1}}"""
+      f"""{{label:'{os_name}', data:sliceData({json.dumps(os_phase_avg_by_date.get(f'{os_name}_build', [0]*len(dates)))},30), _allData:{json.dumps(os_phase_avg_by_date.get(f'{os_name}_build', [0]*len(dates)))}, borderColor:'{["#0d6efd","#28a745","#ffc107","#dc3545","#6f42c1","#fd7e14","#20c997","#e83e8c","#17a2b8","#6610f2"][i % 10]}', fill:false, tension:0.1}}"""
       for i, os_name in enumerate(os_list)
       if f'{os_name}_build' in os_phase_avg_by_date
     )}]
@@ -701,7 +701,7 @@ makeChart('testByOs_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
     datasets: [{','.join(
-      f"""{{label:'{os_name}', data:sliceData({json.dumps(os_phase_avg_by_date.get(f'{os_name}_test', [0]*len(dates)))},30), _allData:{json.dumps(os_phase_avg_by_date.get(f'{os_name}_test', [0]*len(dates)))}, borderColor:'{["#0d6efd","#28a745","#ffc107","#dc3545","#6f42c1"][i % 5]}', fill:false, tension:0.1}}"""
+      f"""{{label:'{os_name}', data:sliceData({json.dumps(os_phase_avg_by_date.get(f'{os_name}_test', [0]*len(dates)))},30), _allData:{json.dumps(os_phase_avg_by_date.get(f'{os_name}_test', [0]*len(dates)))}, borderColor:'{["#0d6efd","#28a745","#ffc107","#dc3545","#6f42c1","#fd7e14","#20c997","#e83e8c","#17a2b8","#6610f2"][i % 10]}', fill:false, tension:0.1}}"""
       for i, os_name in enumerate(os_list)
       if f'{os_name}_test' in os_phase_avg_by_date
     )}]
@@ -983,7 +983,7 @@ def generate_capacity(data, config, output_dir):
             group_parallel_per_day[g].append(round(parallel, 2))
 
     # Build datasets: parallelization line + capacity line per group
-    colors = ["#0d6efd", "#28a745", "#ffc107", "#dc3545", "#6f42c1", "#fd7e14"]
+    colors = ["#0d6efd", "#28a745", "#ffc107", "#dc3545", "#6f42c1", "#fd7e14", "#20c997", "#e83e8c", "#17a2b8", "#6610f2"]
     parallel_datasets = []
     for i, g in enumerate(sorted(sh_groups)):
         color = colors[i % len(colors)]
