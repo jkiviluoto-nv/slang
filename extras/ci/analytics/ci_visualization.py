@@ -172,6 +172,7 @@ def process_jobs(jobs_data, config):
     """Process raw job data into structures needed for visualization."""
     # Filter out skipped jobs for most analysis
     active_jobs = [j for j in jobs_data if j.get("conclusion") != "skipped"]
+    warn_no_build_test = True
 
     # Exclude current (incomplete) day — only generate full days
     today_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
@@ -267,11 +268,13 @@ def process_jobs(jobs_data, config):
                     platform_times[os_name]["build"] = max(
                         platform_times[os_name]["build"], dur
                     )
+                    warn_no_build_test = False
                 elif jname.startswith("test-"):
                     os_name = jname.split("-", 2)[1]
                     platform_times[os_name]["test"] = max(
                         platform_times[os_name]["test"], dur
                     )
+                    warn_no_build_test = False
             if platform_times:
                 sol = max(
                     (t["build"] + t["test"]) for t in platform_times.values()
@@ -314,6 +317,13 @@ def process_jobs(jobs_data, config):
             if test_waits:
                 # Use max across platforms (worst case wait)
                 test_wait_by_date[date_str].append(max(test_waits))
+
+    if warn_no_build_test:
+        print(
+            "Warning: No jobs matched 'build-*' or 'test-*' naming; "
+            "CI build/test breakdowns may be empty.",
+            file=sys.stderr,
+        )
 
     return {
         "all_jobs": jobs_data,

@@ -91,6 +91,14 @@ def analyze_workflow(jobs: List[Dict[str, Any]]) -> None:
         efficiency_str = "N/A"
     print(f"Parallelization Efficiency: {efficiency_str}")
 
+    # Warn if job naming conventions are missing.
+    chainable = [j for j in jobs if " / " in j["name"]]
+    if not chainable:
+        print(
+            "\nWARNING: Job names are missing the expected ' / ' stage separator."
+            "\n         Sequential chain analysis may be inaccurate."
+        )
+
     # Check for failed jobs
     failed_jobs = [j for j in jobs if j["conclusion"] not in ("success", "skipped")]
     if failed_jobs:
