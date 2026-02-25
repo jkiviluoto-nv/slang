@@ -911,8 +911,14 @@ def generate_month_page(month, month_jobs, config, output_dir):
 """)
 
     # Filter controls
-    wf_options = "".join(f'<option value="{w}">{w}</option>' for w in sorted(workflows) if w)
-    br_options = "".join(f'<option value="{b}">{b}</option>' for b in sorted(branches) if b)
+    wf_options = "".join(
+        f'<option value="{html_mod.escape(w)}">{html_mod.escape(w)}</option>'
+        for w in sorted(workflows) if w
+    )
+    br_options = "".join(
+        f'<option value="{html_mod.escape(b)}">{html_mod.escape(b)}</option>'
+        for b in sorted(branches) if b
+    )
 
     body = f"""
 <h1>Timeline: {month}</h1>
