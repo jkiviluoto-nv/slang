@@ -206,9 +206,8 @@ def print_summary(queued_runs, inprogress_runs, all_jobs, now, repo):
     print("=" * 100)
     print(f"\nFetched at: {now.strftime('%Y-%m-%d %H:%M:%S UTC')}  |  Repo: {repo}")
 
-    queued_jobs = [j for j in all_jobs if j["status"] == "queued"]
+    queued_jobs = [j for j in all_jobs if j["status"] in ("queued", "waiting")]
     running_jobs = [j for j in all_jobs if j["status"] == "in_progress"]
-    waiting_jobs = [j for j in all_jobs if j["status"] == "waiting"]
 
     print(f"\nRuns queued:       {len(queued_runs):3d}")
     print(f"Runs in progress:  {len(inprogress_runs):3d}")
@@ -216,8 +215,6 @@ def print_summary(queued_runs, inprogress_runs, all_jobs, now, repo):
         f"\nJobs queued (need runner): {len(queued_jobs):3d}"
     )
     print(f"Jobs running:             {len(running_jobs):3d}")
-    if waiting_jobs:
-        print(f"Jobs waiting (blocked):   {len(waiting_jobs):3d}")
 
 
 def print_queue_by_group(all_jobs, runners, runners_available):
@@ -416,9 +413,8 @@ def print_runner_status(runners, all_jobs, runners_available):
 
 def build_json_output(queued_runs, inprogress_runs, all_jobs, runners, runners_available, now, repo):
     """Build JSON output structure for programmatic consumption."""
-    queued_jobs = [j for j in all_jobs if j["status"] == "queued"]
+    queued_jobs = [j for j in all_jobs if j["status"] in ("queued", "waiting")]
     running_jobs = [j for j in all_jobs if j["status"] == "in_progress"]
-    waiting_jobs = [j for j in all_jobs if j["status"] == "waiting"]
 
     # Queue depth by group
     group_queued = defaultdict(int)
@@ -550,7 +546,7 @@ def build_json_output(queued_runs, inprogress_runs, all_jobs, runners, runners_a
             "runs_in_progress": len(inprogress_runs),
             "jobs_queued": len(queued_jobs),
             "jobs_running": len(running_jobs),
-            "jobs_waiting": len(waiting_jobs),
+            "jobs_waiting": 0,
         },
         "queue_by_group": groups,
         "longest_waiting_jobs": longest_waiting,
