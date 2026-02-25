@@ -111,7 +111,8 @@ def get_start_date(days_str, existing_data, verbose=False):
     if days_str == "all":
         if verbose:
             print("Collecting all available jobs")
-        return datetime.datetime.min.replace(tzinfo=timezone.utc)
+        # GitHub Actions launched Nov 2019; no data before that
+        return datetime.datetime(2019, 11, 1, tzinfo=timezone.utc)
 
     days = int(days_str)
     start = datetime.datetime.now(timezone.utc) - datetime.timedelta(days=days)
