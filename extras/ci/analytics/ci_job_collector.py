@@ -114,7 +114,11 @@ def get_start_date(days_str, existing_data, verbose=False):
         # GitHub Actions launched Nov 2019; no data before that
         return datetime.datetime(2019, 11, 1, tzinfo=timezone.utc)
 
-    days = int(days_str)
+    try:
+        days = int(days_str)
+    except ValueError:
+        print(f"Error: --days must be a number or 'all', got '{days_str}'", file=sys.stderr)
+        sys.exit(1)
     start = datetime.datetime.now(timezone.utc) - datetime.timedelta(days=days)
     start = start.replace(hour=0, minute=0, second=0, microsecond=0)
     if verbose:
