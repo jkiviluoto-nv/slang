@@ -89,6 +89,29 @@ CONCLUSION_COLORS = {
 }
 
 
+def chart_section(chart_id, title, description="", canvas_style=""):
+    """Generate HTML for a chart section with anchor link and download button."""
+    desc_html = f'\n<p style="color:#6c757d;font-size:0.9em">{description}</p>' if description else ""
+    style_attr = f' style="{canvas_style}"' if canvas_style else ""
+    return f"""<div class="chart-section" id="{chart_id}">
+  <h2>{title} <a class="anchor" href="#{chart_id}">#</a>
+  <button class="download-btn" onclick="downloadChart('{chart_id}_canvas')">PNG</button></h2>{desc_html}
+  <div class="chart-container"{style_attr}><canvas id="{chart_id}_canvas"></canvas></div>
+</div>"""
+
+
+DOWNLOAD_JS = """
+function downloadChart(canvasId) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  var link = document.createElement('a');
+  link.download = canvasId.replace('_canvas', '') + '.png';
+  link.href = canvas.toDataURL('image/png', 1.0);
+  link.click();
+}
+"""
+
+
 def nav_html(active=""):
     links = [
         ("index.html", "Home"),
@@ -121,6 +144,13 @@ def page_template(title, body, active=""):
   th, td {{ border: 1px solid #dee2e6; padding: 8px; text-align: left; }}
   th {{ background: #f8f9fa; }}
   .chart-container {{ position: relative; width: 100%; max-width: 1200px; margin: 20px 0; }}
+  .chart-section {{ margin-bottom: 30px; }}
+  .chart-section h2 {{ display: flex; align-items: center; gap: 8px; }}
+  .chart-section h2 a.anchor {{ color: #adb5bd; text-decoration: none; font-size: 0.7em; visibility: hidden; }}
+  .chart-section:hover h2 a.anchor {{ visibility: visible; }}
+  .chart-section h2 a.anchor:hover {{ color: #0d6efd; }}
+  .download-btn {{ font-size: 12px; color: #6c757d; cursor: pointer; border: 1px solid #dee2e6; background: white; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }}
+  .download-btn:hover {{ background: #f8f9fa; color: #333; }}
   .stat-card {{ display: inline-block; background: #f8f9fa; border-radius: 8px; padding: 15px 25px; margin: 5px; text-align: center; }}
   .stat-card .value {{ font-size: 2em; font-weight: bold; color: #212529; }}
   .stat-card .label {{ font-size: 0.9em; color: #6c757d; }}
@@ -186,6 +216,8 @@ def process_jobs(jobs_data, config):
     turnaround_by_date = defaultdict(list)  # date -> list of turnaround minutes
     ci_turnaround_by_date = defaultdict(list)  # same but only "CI" workflow
     ci_sol_by_date = defaultdict(list)  # speed of light per CI run
+    build_wait_by_date = defaultdict(list)  # build queue wait per CI run
+    test_wait_by_date = defaultdict(list)  # test queue wait (after build) per CI run
     for run_id, run_jobs in runs.items():
         # Find earliest job created_at and latest completed_at
         earliest_job = None
@@ -246,6 +278,43 @@ def process_jobs(jobs_data, config):
                 )
                 ci_sol_by_date[date_str].append(sol / 60)
 
+            # Build wait: run trigger to first build job started
+            # Test wait: last build completed to first test started (per platform)
+            build_starts = []
+            build_ends_by_os = defaultdict(list)
+            test_starts_by_os = defaultdict(list)
+            for j in run_jobs:
+                jname = j.get("name", "")
+                started = parse_dt(j.get("started_at"))
+                completed = parse_dt(j.get("completed_at"))
+                if jname.startswith("build-") and started:
+                    build_starts.append(started)
+                    os_name = jname.split("-", 2)[1]
+                    if completed:
+                        build_ends_by_os[os_name].append(completed)
+                elif jname.startswith("test-") and started:
+                    os_name = jname.split("-", 2)[1]
+                    test_starts_by_os[os_name].append(started)
+
+            if build_starts and run_start:
+                first_build = min(build_starts)
+                bw = (first_build - run_start).total_seconds() / 60
+                if bw >= 0:
+                    build_wait_by_date[date_str].append(bw)
+
+            # Test wait per platform: gap between last build end and first test start
+            test_waits = []
+            for os_name in test_starts_by_os:
+                if os_name in build_ends_by_os and test_starts_by_os[os_name]:
+                    last_build = max(build_ends_by_os[os_name])
+                    first_test = min(test_starts_by_os[os_name])
+                    tw = (first_test - last_build).total_seconds() / 60
+                    if tw >= 0:
+                        test_waits.append(tw)
+            if test_waits:
+                # Use max across platforms (worst case wait)
+                test_wait_by_date[date_str].append(max(test_waits))
+
     return {
         "all_jobs": jobs_data,
         "active_jobs": active_jobs,
@@ -254,6 +323,8 @@ def process_jobs(jobs_data, config):
         "turnaround_by_date": dict(turnaround_by_date),
         "ci_turnaround_by_date": dict(ci_turnaround_by_date),
         "ci_sol_by_date": dict(ci_sol_by_date),
+        "build_wait_by_date": dict(build_wait_by_date),
+        "test_wait_by_date": dict(test_wait_by_date),
         "dates": sorted(jobs_by_date.keys()),
         "months": sorted(jobs_by_month.keys()),
     }
@@ -262,16 +333,46 @@ def process_jobs(jobs_data, config):
 # --- Index page ---
 
 
+def _avg_last_n_days(by_date, dates, n):
+    """Average of values across the last n dates."""
+    recent = dates[-n:] if len(dates) >= n else dates
+    all_vals = []
+    for d in recent:
+        all_vals.extend(by_date.get(d, []))
+    return sum(all_vals) / len(all_vals) if all_vals else 0
+
+
 def generate_index(data, output_dir):
     active = data["active_jobs"]
+    dates = data["dates"]
     total = len(active)
     success = sum(1 for j in active if j.get("conclusion") == "success")
-    failed = sum(1 for j in active if j.get("conclusion") == "failure")
-    avg_dur = 0
-    durations = [j["duration_seconds"] for j in active if j.get("duration_seconds") and j["duration_seconds"] > 0]
-    if durations:
-        avg_dur = sum(durations) / len(durations)
     success_rate = (success / total * 100) if total > 0 else 0
+
+    # Last 3 days key figures
+    ci_tat_3d = _avg_last_n_days(data.get("ci_turnaround_by_date", {}), dates, 3)
+
+    # Active PRs: count unique PR branches in last 3 days
+    recent_dates = dates[-3:] if len(dates) >= 3 else dates
+    pr_branches = set()
+    for d in recent_dates:
+        for j in data["jobs_by_date"].get(d, []):
+            if j.get("event") == "pull_request" and j.get("head_branch"):
+                pr_branches.add(j["head_branch"])
+    prs_3d = len(pr_branches) / len(recent_dates) if recent_dates else 0
+
+    # Queue wait: average across last 3 days
+    queue_vals = []
+    for d in recent_dates:
+        for j in data["jobs_by_date"].get(d, []):
+            q = j.get("queued_seconds")
+            if q and q >= 0:
+                queue_vals.append(q / 60)
+    queue_3d = sum(queue_vals) / len(queue_vals) if queue_vals else 0
+
+    # Build and test wait
+    bw_3d = _avg_last_n_days(data.get("build_wait_by_date", {}), dates, 3)
+    tw_3d = _avg_last_n_days(data.get("test_wait_by_date", {}), dates, 3)
 
     months_html = ""
     for month in reversed(data["months"]):
@@ -280,13 +381,20 @@ def generate_index(data, output_dir):
 
     body = f"""
 <h1>Slang CI Analytics</h1>
+<h2>Last 3 Days</h2>
+<div>
+  <div class="stat-card"><div class="value">{ci_tat_3d:.0f}m</div><div class="label">CI Turnaround (avg)</div></div>
+  <div class="stat-card"><div class="value">{prs_3d:.0f}</div><div class="label">Active PRs / day</div></div>
+  <div class="stat-card"><div class="value">{queue_3d:.1f}m</div><div class="label">Avg Queue Wait</div></div>
+  <div class="stat-card"><div class="value">{bw_3d:.1f}m</div><div class="label">Build Wait</div></div>
+  <div class="stat-card"><div class="value">{tw_3d:.1f}m</div><div class="label">Test Wait (after build)</div></div>
+</div>
+<h2>Overall</h2>
 <div>
   <div class="stat-card"><div class="value">{total}</div><div class="label">Total Jobs</div></div>
   <div class="stat-card"><div class="value">{success_rate:.1f}%</div><div class="label">Success Rate</div></div>
-  <div class="stat-card"><div class="value">{failed}</div><div class="label">Failures</div></div>
-  <div class="stat-card"><div class="value">{format_duration(avg_dur)}</div><div class="label">Avg Duration</div></div>
 </div>
-<p style="color:#6c757d;margin-top:10px">Excludes skipped jobs. Data range: {data['dates'][0] if data['dates'] else 'N/A'} to {data['dates'][-1] if data['dates'] else 'N/A'}</p>
+<p style="color:#6c757d;margin-top:10px">Excludes skipped jobs. Data range: {dates[0] if dates else 'N/A'} to {dates[-1] if dates else 'N/A'}</p>
 
 <h2>Pages</h2>
 <ul>
@@ -440,6 +548,17 @@ def generate_statistics(data, output_dir):
     event_names = sorted(event_counts.keys())
     event_values = [event_counts[e] for e in event_names]
 
+    # Build and test wait times per day
+    build_wait_by_date = data.get("build_wait_by_date", {})
+    test_wait_by_date = data.get("test_wait_by_date", {})
+    avg_build_wait = []
+    avg_test_wait = []
+    for date in dates:
+        bw = build_wait_by_date.get(date, [])
+        avg_build_wait.append(round(sum(bw) / len(bw), 1) if bw else 0)
+        tw = test_wait_by_date.get(date, [])
+        avg_test_wait.append(round(sum(tw) / len(tw), 1) if tw else 0)
+
     body = f"""
 <h1>Statistics &amp; Trends</h1>
 
@@ -453,41 +572,33 @@ def generate_statistics(data, output_dir):
   </select>
 </div>
 
-<h2>CI Turnaround Time (minutes)</h2>
-<p style="color:#6c757d;font-size:0.9em">Main CI workflow only. Time from workflow trigger to last job completed per run. Speed of light = max(build+test) across platforms, assuming full parallelization.</p>
-<div class="chart-container"><canvas id="turnaround"></canvas></div>
+{chart_section("turnaround", "CI Turnaround Time (minutes)",
+    "Main CI workflow only. Time from workflow trigger to last job completed per run. Speed of light = max(build+test) across platforms, assuming full parallelization.")}
 
-<h2>Active PRs per Day</h2>
-<div class="chart-container"><canvas id="prsPerDay"></canvas></div>
+{chart_section("prsPerDay", "Active PRs per Day")}
 
-<h2>Build Duration by OS (minutes)</h2>
-<p style="color:#6c757d;font-size:0.9em">Average build job duration per day, CI workflow only.</p>
-<div class="chart-container"><canvas id="buildByOs"></canvas></div>
+{chart_section("buildTestWait", "Build and Test Wait Times (minutes)",
+    "Build wait: run trigger to first build started. Test wait: last build completed to first test started (worst platform).")}
 
-<h2>Test Duration by OS (minutes)</h2>
-<p style="color:#6c757d;font-size:0.9em">Average test job duration per day, CI workflow only.</p>
-<div class="chart-container"><canvas id="testByOs"></canvas></div>
+{chart_section("buildByOs", "Build Duration by OS (minutes)",
+    "Average build job duration per day, CI workflow only.")}
 
-<h2>Jobs per Day</h2>
-<div class="chart-container"><canvas id="jobsPerDay"></canvas></div>
+{chart_section("testByOs", "Test Duration by OS (minutes)",
+    "Average test job duration per day, CI workflow only.")}
 
-<h2>Workflow Runs per Day</h2>
-<div class="chart-container"><canvas id="runsPerDay"></canvas></div>
+{chart_section("jobsPerDay", "Jobs per Day")}
 
-<h2>Average Job Duration (minutes)</h2>
-<div class="chart-container"><canvas id="avgDuration"></canvas></div>
+{chart_section("runsPerDay", "Workflow Runs per Day")}
 
-<h2>Average Queue Wait Time (minutes)</h2>
-<div class="chart-container"><canvas id="avgQueue"></canvas></div>
+{chart_section("avgDuration", "Average Job Duration (minutes)")}
 
-<h2>Failure Rate (%)</h2>
-<div class="chart-container"><canvas id="failureRate"></canvas></div>
+{chart_section("avgQueue", "Average Queue Wait Time (minutes)")}
 
-<h2>Jobs by Runner Group</h2>
-<div class="chart-container" style="max-width:800px"><canvas id="byGroup"></canvas></div>
+{chart_section("failureRate", "Failure Rate (%)")}
 
-<h2>Jobs by Event Type</h2>
-<div class="chart-container" style="max-width:500px"><canvas id="byEvent"></canvas></div>
+{chart_section("byGroup", "Jobs by Runner Group", canvas_style="max-width:800px")}
+
+{chart_section("byEvent", "Jobs by Event Type", canvas_style="max-width:500px")}
 
 <script src="{CHARTJS_CDN}"></script>
 <script>
@@ -505,8 +616,12 @@ const allTurnAvg = {json.dumps(ci_avg_tat)};
 const allTurnMedian = {json.dumps(ci_median_tat)};
 const allTurnP95 = {json.dumps(ci_p95_tat)};
 const allSoL = {json.dumps(ci_sol_avg)};
+const allBuildWait = {json.dumps(avg_build_wait)};
+const allTestWait = {json.dumps(avg_test_wait)};
 
 let charts = [];
+
+{DOWNLOAD_JS}
 
 function sliceData(arr, n) {{
   return n === 0 ? arr : arr.slice(-n);
@@ -533,7 +648,7 @@ function updateRange() {{
 }}
 
 // CI Turnaround time
-makeChart('turnaround', 'line', {{
+makeChart('turnaround_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
     datasets: [
@@ -546,8 +661,20 @@ makeChart('turnaround', 'line', {{
   options: {{responsive:true, scales:{{y:{{title:{{display:true,text:'Minutes'}}}}}}}}
 }});
 
+// Build and test wait times
+makeChart('buildTestWait_canvas', 'line', {{
+  data: {{
+    labels: sliceData(allLabels, 30),
+    datasets: [
+      {{label:'Build Wait', data:sliceData(allBuildWait,30), _allData:allBuildWait, borderColor:'#0d6efd', fill:false, tension:0.1}},
+      {{label:'Test Wait (after build)', data:sliceData(allTestWait,30), _allData:allTestWait, borderColor:'#dc3545', fill:false, tension:0.1}},
+    ]
+  }},
+  options: {{responsive:true, scales:{{y:{{title:{{display:true,text:'Minutes'}}}}}}}}
+}});
+
 // Build duration by OS
-makeChart('buildByOs', 'line', {{
+makeChart('buildByOs_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
     datasets: [{','.join(
@@ -560,7 +687,7 @@ makeChart('buildByOs', 'line', {{
 }});
 
 // Test duration by OS
-makeChart('testByOs', 'line', {{
+makeChart('testByOs_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
     datasets: [{','.join(
@@ -573,7 +700,7 @@ makeChart('testByOs', 'line', {{
 }});
 
 // Jobs per day (stacked bar)
-makeChart('jobsPerDay', 'bar', {{
+makeChart('jobsPerDay_canvas', 'bar', {{
   data: {{
     labels: sliceData(allLabels, 30),
     datasets: [
@@ -586,7 +713,7 @@ makeChart('jobsPerDay', 'bar', {{
 }});
 
 // Active PRs per day
-makeChart('prsPerDay', 'line', {{
+makeChart('prsPerDay_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
     datasets: [{{label:'Active PRs', data:sliceData(allPRs,30), _allData:allPRs, borderColor:'#28a745', fill:true, backgroundColor:'rgba(40,167,69,0.1)', tension:0.1}}]
@@ -595,7 +722,7 @@ makeChart('prsPerDay', 'line', {{
 }});
 
 // Runs per day
-makeChart('runsPerDay', 'line', {{
+makeChart('runsPerDay_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
     datasets: [{{label:'Workflow Runs', data:sliceData(allRuns,30), _allData:allRuns, borderColor:'#0d6efd', fill:false, tension:0.1}}]
@@ -604,7 +731,7 @@ makeChart('runsPerDay', 'line', {{
 }});
 
 // Average duration
-makeChart('avgDuration', 'line', {{
+makeChart('avgDuration_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
     datasets: [
@@ -616,7 +743,7 @@ makeChart('avgDuration', 'line', {{
 }});
 
 // Queue wait time
-makeChart('avgQueue', 'line', {{
+makeChart('avgQueue_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
     datasets: [{{label:'Avg Queue (min)', data:sliceData(allQueue,30), _allData:allQueue, borderColor:'#6f42c1', fill:true, backgroundColor:'rgba(111,66,193,0.1)', tension:0.1}}]
@@ -625,7 +752,7 @@ makeChart('avgQueue', 'line', {{
 }});
 
 // Failure rate
-makeChart('failureRate', 'line', {{
+makeChart('failureRate_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
     datasets: [{{label:'Failure Rate %', data:sliceData(allFailRate,30), _allData:allFailRate, borderColor:'{CONCLUSION_COLORS["failure"]}', fill:true, backgroundColor:'rgba(220,53,69,0.1)', tension:0.1}}]
@@ -634,7 +761,7 @@ makeChart('failureRate', 'line', {{
 }});
 
 // By runner group (static, no range filter)
-new Chart(document.getElementById('byGroup').getContext('2d'), {{
+new Chart(document.getElementById('byGroup_canvas').getContext('2d'), {{
   type: 'bar',
   data: {{
     labels: {json.dumps(group_names)},
@@ -644,7 +771,7 @@ new Chart(document.getElementById('byGroup').getContext('2d'), {{
 }});
 
 // By event type (static)
-new Chart(document.getElementById('byEvent').getContext('2d'), {{
+new Chart(document.getElementById('byEvent_canvas').getContext('2d'), {{
   type: 'pie',
   data: {{
     labels: {json.dumps(event_names)},
@@ -884,12 +1011,10 @@ def generate_capacity(data, config, output_dir):
     body = f"""
 <h1>Runner Capacity Analysis</h1>
 
-<h2>Average Concurrent Runners (Parallelization Rate)</h2>
-<p style="color:#6c757d;font-size:0.9em">Total busy time / 24h per runner group. Dashed lines show fleet capacity.</p>
-<div class="chart-container"><canvas id="parallelChart"></canvas></div>
+{chart_section("parallelRate", "Average Concurrent Runners (Parallelization Rate)",
+    "Total busy time / 24h per runner group.")}
 
-<h2>Queue Wait Time (minutes)</h2>
-<div class="chart-container"><canvas id="queueChart"></canvas></div>
+{chart_section("queueWait", "Queue Wait Time (minutes)")}
 
 <h2>Runner Group Summary</h2>
 <table>
@@ -899,7 +1024,9 @@ def generate_capacity(data, config, output_dir):
 
 <script src="{CHARTJS_CDN}"></script>
 <script>
-new Chart(document.getElementById('parallelChart').getContext('2d'), {{
+{DOWNLOAD_JS}
+
+new Chart(document.getElementById('parallelRate_canvas').getContext('2d'), {{
   type: 'line',
   data: {{
     labels: {json.dumps(dates)},
@@ -908,7 +1035,7 @@ new Chart(document.getElementById('parallelChart').getContext('2d'), {{
   options: {{responsive:true, scales:{{y:{{min:0,title:{{display:true,text:'Avg Concurrent Runners'}}}}}}}}
 }});
 
-new Chart(document.getElementById('queueChart').getContext('2d'), {{
+new Chart(document.getElementById('queueWait_canvas').getContext('2d'), {{
   type: 'line',
   data: {{
     labels: {json.dumps(dates)},
