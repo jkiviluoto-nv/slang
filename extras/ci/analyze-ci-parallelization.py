@@ -50,7 +50,7 @@ def parse_jobs(jobs_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         duration = (end - start).total_seconds() / 60
 
         parsed_jobs.append({
-            "name": job["name"],
+            "name": job.get("name", "Unknown"),
             "started_at": job["started_at"],
             "completed_at": job["completed_at"],
             "start_time": start,
@@ -150,7 +150,7 @@ def analyze_job_chains(jobs: List[Dict[str, Any]], workflow_start: datetime) -> 
         platform_jobs.sort(key=lambda x: x["start_time"])
         total_work = sum(j["duration_min"] for j in platform_jobs)
         chain_start = platform_jobs[0]["start_time"]
-        chain_end = platform_jobs[-1]["end_time"]
+        chain_end = max(j["end_time"] for j in platform_jobs)
         elapsed = (chain_end - chain_start).total_seconds() / 60
 
         # Calculate actual idle time by finding gaps in the union of busy intervals.
@@ -260,7 +260,7 @@ def provide_recommendations(jobs: List[Dict[str, Any]], total_duration: float, t
     elif parallelization_efficiency < 5:
         print("\nLOW PARALLELIZATION EFFICIENCY")
         print(f"   Current: {parallelization_efficiency:.1f}x")
-        print(f"   Many jobs are running sequentially. Consider:")
+        print("   Many jobs are running sequentially. Consider:")
         print("   - Reviewing job dependencies to allow more parallel execution")
         print("   - Adding more runners to handle parallel workloads")
     elif parallelization_efficiency < 10:
