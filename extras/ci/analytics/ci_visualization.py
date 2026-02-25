@@ -27,6 +27,10 @@ PIXELS_PER_HOUR = 265
 ROW_HEIGHT = 28
 TOTAL_WIDTH = PIXELS_PER_HOUR * 24  # 6360px for 24h
 
+# Valid OS names for per-platform charts; excludes test categories
+# like materialx, rtx, slangpy that follow the same naming pattern
+VALID_OS = {"linux", "macos", "windows"}
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -257,8 +261,6 @@ def process_jobs(jobs_data, config):
             # Speed of light: max across platforms of (longest build + longest test).
             # This is the fastest possible turnaround with full parallelization,
             # limited only by the critical path of build->test per platform.
-            # Only real OS platforms for speed-of-light and wait calculations
-            _VALID_OS = {"linux", "macos", "windows"}
             platform_times = defaultdict(lambda: {"build": 0, "test": 0})
             for j in run_jobs:
                 dur = j.get("duration_seconds") or 0
@@ -267,7 +269,7 @@ def process_jobs(jobs_data, config):
                 jname = j.get("name", "")
                 if jname.startswith("build-"):
                     os_name = jname.split("-", 2)[1]
-                    if os_name not in _VALID_OS:
+                    if os_name not in VALID_OS:
                         continue
                     platform_times[os_name]["build"] = max(
                         platform_times[os_name]["build"], dur
@@ -275,7 +277,7 @@ def process_jobs(jobs_data, config):
                     warn_no_build_test = False
                 elif jname.startswith("test-"):
                     os_name = jname.split("-", 2)[1]
-                    if os_name not in _VALID_OS:
+                    if os_name not in VALID_OS:
                         continue
                     platform_times[os_name]["test"] = max(
                         platform_times[os_name]["test"], dur
@@ -298,14 +300,14 @@ def process_jobs(jobs_data, config):
                 completed = parse_dt(j.get("completed_at"))
                 if jname.startswith("build-") and started:
                     os_name = jname.split("-", 2)[1]
-                    if os_name not in _VALID_OS:
+                    if os_name not in VALID_OS:
                         continue
                     build_starts.append(started)
                     if completed:
                         build_ends_by_os[os_name].append(completed)
                 elif jname.startswith("test-") and started:
                     os_name = jname.split("-", 2)[1]
-                    if os_name not in _VALID_OS:
+                    if os_name not in VALID_OS:
                         continue
                     test_starts_by_os[os_name].append(started)
 
@@ -527,8 +529,6 @@ def generate_statistics(data, output_dir):
         else:
             continue
         # Extract OS: build-{os}-... or test-{os}-...
-        # Skip test categories (materialx, rtx, slangpy) that aren't OS names
-        VALID_OS = {"linux", "macos", "windows"}
         parts = name.split("-", 2)
         if len(parts) < 2:
             continue
