@@ -32,7 +32,7 @@ DEFAULT_TOP_WAITING = 15
 # Each entry: (required_labels_set, group_name, is_self_hosted)
 # Checked top-to-bottom; first match where required_labels is a subset of
 # the job's labels wins.
-LABEL_GROUPS = [
+DEFAULT_LABEL_GROUPS = [
     ({"Linux", "self-hosted", "GPU"}, "Linux GPU (self-hosted)", True),
     ({"Windows", "self-hosted", "GCP-T4"}, "Windows GPU (self-hosted, org)", True),
     # These Windows runners share the same physical machines (SLANGWIN*)
@@ -46,6 +46,32 @@ LABEL_GROUPS = [
     ({"macos-latest"}, "GitHub macOS", False),
     ({"windows-latest"}, "GitHub Windows", False),
 ]
+
+
+def load_label_groups():
+    """Load label groups from analytics/runner_config.json if available."""
+    config_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "analytics",
+        "runner_config.json",
+    )
+    if not os.path.exists(config_path):
+        return DEFAULT_LABEL_GROUPS
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        groups = []
+        for group in config.get("label_groups", []):
+            labels = set(group.get("labels", []))
+            name = group.get("name", "Other")
+            self_hosted = bool(group.get("self_hosted", False))
+            groups.append((labels, name, self_hosted))
+        return groups or DEFAULT_LABEL_GROUPS
+    except (OSError, json.JSONDecodeError):
+        return DEFAULT_LABEL_GROUPS
+
+
+LABEL_GROUPS = load_label_groups()
 
 
 def fetch_runs(repo, status):
