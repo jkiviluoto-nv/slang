@@ -112,8 +112,11 @@ def fetch_runners(repo):
     data, err = gh_api_list(f"repos/{repo}/actions/runners?per_page=100", "runners")
     if not err and isinstance(data, list):
         for r in data:
+            rid = r.get("id")
+            if rid is None:
+                continue
             runners.append(r)
-            seen_ids.add(r["id"])
+            seen_ids.add(rid)
         success = True
 
     # Try org-level: find runner groups shared with this repo
@@ -157,9 +160,10 @@ def fetch_runners(repo):
             with ThreadPoolExecutor(max_workers=6) as executor:
                 for group_runners in executor.map(_fetch_group_runners, groups):
                     for r in group_runners:
-                        if r["id"] not in seen_ids:
+                        rid = r.get("id")
+                        if rid is not None and rid not in seen_ids:
                             runners.append(r)
-                            seen_ids.add(r["id"])
+                            seen_ids.add(rid)
             success = True
 
     return runners, success
@@ -633,7 +637,9 @@ def main():
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {
-            executor.submit(fetch_jobs_for_run, repo, r["id"]): r for r in all_runs
+            executor.submit(fetch_jobs_for_run, repo, r["id"]): r
+            for r in all_runs
+            if r.get("id") is not None
         }
         for future in as_completed(futures):
             run = futures[future]
