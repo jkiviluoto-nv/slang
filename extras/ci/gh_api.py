@@ -66,8 +66,13 @@ def gh_api_list(endpoint, key):
 
 def coerce_jobs_data(data):
     """Normalize various input formats into a flat jobs list."""
-    if isinstance(data, dict) and "jobs" in data:
-        return data["jobs"]
+    if isinstance(data, dict):
+        if "jobs" in data:
+            return data["jobs"]
+        # gh --jq '.jobs[]' emits one job object per line
+        if "name" in data and ("started_at" in data or "completed_at" in data):
+            return [data]
+        return []
     if isinstance(data, list):
         return data
     return []
@@ -90,6 +95,9 @@ def load_paginated_stdin():
     except json.JSONDecodeError:
         # Slow path: concatenated JSON objects from --paginate
         jobs_data = []
-        for obj in parse_json_stream(payload):
-            jobs_data.extend(coerce_jobs_data(obj))
+        try:
+            for obj in parse_json_stream(payload):
+                jobs_data.extend(coerce_jobs_data(obj))
+        except json.JSONDecodeError:
+            pass
         return jobs_data
