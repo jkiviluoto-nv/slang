@@ -28,7 +28,6 @@ TOTAL_WIDTH = PIXELS_PER_HOUR * 24  # 6360px for 24h
 
 
 def parse_args():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser(
         description="Generate CI analytics HTML from job data."
     )
