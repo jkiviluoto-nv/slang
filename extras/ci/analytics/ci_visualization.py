@@ -816,6 +816,19 @@ def generate_month_page(month, month_jobs, config, output_dir):
         branches.add(job.get("head_branch", ""))
         days[date_str][runner].append(job)
 
+        # Jobs crossing midnight: add a continuation entry on the next day
+        if started.date() != completed.date():
+            import datetime as _dt
+            next_day = (started + _dt.timedelta(days=1)).strftime("%Y-%m-%d")
+            next_midnight = _dt.datetime.combine(
+                started.date() + _dt.timedelta(days=1),
+                _dt.time.min,
+                tzinfo=started.tzinfo,
+            )
+            cont = dict(job)
+            cont["_cont_started_at"] = next_midnight.isoformat()
+            days[next_day][runner].append(cont)
+
     sorted_dates = sorted(days.keys())
 
     # Build HTML for each day
@@ -839,11 +852,15 @@ def generate_month_page(month, month_jobs, config, output_dir):
             )
 
             for job in runners_data[runner]:
-                started = parse_dt(job["started_at"])
+                # Use continuation start if this is a midnight-spanning entry
+                cont_start = job.get("_cont_started_at")
+                started = parse_dt(cont_start) if cont_start else parse_dt(job["started_at"])
                 completed = parse_dt(job["completed_at"])
                 # Position in pixels from midnight UTC
                 start_hour = started.hour + started.minute / 60 + started.second / 3600
                 dur_hours = (completed - started).total_seconds() / 3600
+                # Clamp to 24h boundary
+                dur_hours = min(dur_hours, 24 - start_hour)
                 left = 120 + int(start_hour * PIXELS_PER_HOUR)
                 width = max(int(dur_hours * PIXELS_PER_HOUR), 3)
 
