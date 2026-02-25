@@ -145,7 +145,14 @@ def _fetch_runs_window(repo, date_from, date_to, seen_ids, depth=0):
         "workflow_runs",
     )
 
-    if err or not runs:
+    if err:
+        print(
+            f"  Warning: API error for {from_str}..{to_str}: {err}",
+            file=sys.stderr,
+        )
+        return []
+
+    if not runs:
         return []
 
     # Deduplicate against already-seen IDs
