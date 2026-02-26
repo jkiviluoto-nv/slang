@@ -135,7 +135,22 @@ def get_start_date(days_str, existing_data, verbose=False):
 API_PAGINATION_CAP = 1000
 
 
-def _fetch_runs_window(repo, date_from, date_to, seen_ids, depth=0):
+def resolve_workflow_id(repo, workflow_name):
+    """Resolve a workflow name to workflow id."""
+    workflows, err = gh_api_list(
+        f"repos/{repo}/actions/workflows?per_page=100",
+        "workflows",
+    )
+    if err:
+        print(f"Warning: Could not resolve workflow '{workflow_name}': {err}", file=sys.stderr)
+        return None
+    for wf in workflows or []:
+        if wf.get("name") == workflow_name:
+            return wf.get("id")
+    return None
+
+
+def _fetch_runs_window(repo, date_from, date_to, seen_ids, workflow_id=None, depth=0):
     """Fetch runs for a time window, subdividing if the API cap is hit.
 
     The GitHub API returns at most 1000 results per paginated query.
@@ -145,9 +160,13 @@ def _fetch_runs_window(repo, date_from, date_to, seen_ids, depth=0):
     from_str = date_from.strftime("%Y-%m-%dT%H:%M:%SZ")
     to_str = date_to.strftime("%Y-%m-%dT%H:%M:%SZ")
 
+    endpoint = (
+        f"repos/{repo}/actions/workflows/{workflow_id}/runs"
+        if workflow_id
+        else f"repos/{repo}/actions/runs"
+    )
     runs, err = gh_api_list(
-        f"repos/{repo}/actions/runs?status=completed&per_page=100"
-        f"&created={from_str}..{to_str}",
+        f"{endpoint}?status=completed&per_page=100&created={from_str}..{to_str}",
         "workflow_runs",
     )
 
@@ -176,8 +195,8 @@ def _fetch_runs_window(repo, date_from, date_to, seen_ids, depth=0):
             )
             for r in new_runs:
                 seen_ids.add(r["id"])
-            left = _fetch_runs_window(repo, date_from, mid, seen_ids, depth + 1)
-            right = _fetch_runs_window(repo, mid, date_to, seen_ids, depth + 1)
+            left = _fetch_runs_window(repo, date_from, mid, seen_ids, workflow_id, depth + 1)
+            right = _fetch_runs_window(repo, mid, date_to, seen_ids, workflow_id, depth + 1)
             return new_runs + left + right
 
     for r in new_runs:
@@ -185,7 +204,7 @@ def _fetch_runs_window(repo, date_from, date_to, seen_ids, depth=0):
     return new_runs
 
 
-def fetch_completed_runs(repo, since_date, verbose=False):
+def fetch_completed_runs(repo, since_date, workflow_id=None, verbose=False):
     """Fetch completed workflow runs since a given date.
 
     Walks day by day, subdividing any day that hits the GitHub API's
@@ -208,7 +227,7 @@ def fetch_completed_runs(repo, since_date, verbose=False):
             flush=True,
         )
 
-        day_runs = _fetch_runs_window(repo, current, next_day, seen_ids)
+        day_runs = _fetch_runs_window(repo, current, next_day, seen_ids, workflow_id)
         all_runs.extend(day_runs)
 
         print(f" {len(day_runs)} runs", file=sys.stderr)
@@ -378,14 +397,25 @@ def main():
         print(f"Collecting CI jobs since {start_date.isoformat()}")
 
     # Fetch completed runs
-    runs = fetch_completed_runs(args.repo, start_date, args.verbose)
+    workflow_id = None
+    if args.workflow:
+        workflow_id = resolve_workflow_id(args.repo, args.workflow)
+        if workflow_id:
+            print(f"Resolved workflow '{args.workflow}' to ID {workflow_id}")
+        else:
+            print(
+                f"Warning: workflow '{args.workflow}' was not resolved; falling back to repository-wide run fetch.",
+                file=sys.stderr,
+            )
+
+    runs = fetch_completed_runs(args.repo, start_date, workflow_id, args.verbose)
     if not runs:
         print("No completed runs found in the specified time range.")
         if existing_count > 0:
             print(f"Existing dataset contains {existing_count} jobs.")
         return
 
-    # Filter by workflow name if specified
+    # Keep name-based filter for safety (in case workflow resolution fails)
     if args.workflow:
         before = len(runs)
         runs = [r for r in runs if r.get("name") == args.workflow]
