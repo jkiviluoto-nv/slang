@@ -418,7 +418,7 @@ def generate_index(data, output_dir):
   <div class="stat-card"><div class="value">{total}</div><div class="label">Total Jobs</div></div>
   <div class="stat-card"><div class="value">{success_rate:.1f}%</div><div class="label">Success Rate</div></div>
 </div>
-<p style="color:#6c757d;margin-top:10px">Excludes skipped jobs. Data range: {dates[0] if dates else 'N/A'} to {dates[-1] if dates else 'N/A'}</p>
+<p style="color:#6c757d;margin-top:10px">CI workflow only. Excludes skipped jobs. Data range: {dates[0] if dates else 'N/A'} to {dates[-1] if dates else 'N/A'}</p>
 
 <h2>Pages</h2>
 <ul>
@@ -642,6 +642,7 @@ def generate_statistics(data, config, output_dir):
 
     body = f"""
 <h1>Statistics &amp; Trends</h1>
+<p style="color:#6c757d">CI workflow only. Excludes skipped jobs.</p>
 
 <div style="margin-bottom:15px">
   <label>Date range: </label>
@@ -654,7 +655,7 @@ def generate_statistics(data, config, output_dir):
 </div>
 
 {chart_section("turnaround", "CI Turnaround Time (minutes)",
-    "Main CI workflow only. Time from workflow trigger to last job completed per run. Speed of light = max(build+test) across platforms, assuming full parallelization.")}
+    "Time from workflow trigger to last job completed per run. Speed of light = max(build+test) across platforms, assuming full parallelization.")}
 
 {chart_section("prsPerDay", "Active PRs per Day",
     "Unique PR branches with CI activity per day.")}
@@ -663,16 +664,16 @@ def generate_statistics(data, config, output_dir):
     "Build wait: run trigger to first build started. Test wait: last build completed to first test started (worst platform).")}
 
 {chart_section("buildByOs", "Build Duration by OS (minutes)",
-    "Average build job duration per day, CI workflow only.")}
+    "Average build job duration per day.")}
 
 {chart_section("testByOs", "Test Duration by OS (minutes)",
-    "Average test job duration per day, CI workflow only.")}
+    "Average test job duration per day.")}
 
 {chart_section("jobsPerDay", "Jobs per Day",
     "Stacked by conclusion: success, failure, cancelled.")}
 
 {chart_section("runsPerDay", "Workflow Runs per Day",
-    "Number of distinct CI workflow runs per day.")}
+    "Number of distinct workflow runs per day.")}
 
 {chart_section("avgDuration", "Average Job Duration (minutes)",
     "Mean duration across all jobs per day, with 7-day moving average.")}
