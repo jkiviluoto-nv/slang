@@ -5,9 +5,8 @@ GitHub Actions CI Visualization
 Generates static HTML files with interactive visualizations of CI job data.
 Reads JSON data from ci_job_collector.py and produces:
 - index.html: Landing page with summary and links
-- statistics.html: Trend charts (Chart.js)
+- statistics.html: All charts (trends, capacity, runner analysis)
 - month_YYYY-MM.html: Daily Gantt-style timeline per runner
-- capacity.html: Runner utilization analysis
 
 Usage:
     python3 ci_visualization.py
@@ -120,7 +119,6 @@ def nav_html(active=""):
     links = [
         ("index.html", "Home"),
         ("statistics.html", "Statistics"),
-        ("capacity.html", "Capacity"),
     ]
     items = []
     for href, label in links:
@@ -421,7 +419,6 @@ def generate_index(data, output_dir):
 <h2>Pages</h2>
 <ul>
   <li><a href="statistics.html">Statistics &amp; Trends</a></li>
-  <li><a href="capacity.html">Runner Capacity Analysis</a></li>
 </ul>
 
 <h2>Monthly Timelines</h2>
@@ -436,7 +433,7 @@ def generate_index(data, output_dir):
 # --- Statistics page ---
 
 
-def generate_statistics(data, output_dir):
+def generate_statistics(data, config, output_dir):
     dates = data["dates"]
     jobs_by_date = data["jobs_by_date"]
     active = data["active_jobs"]
@@ -565,12 +562,66 @@ def generate_statistics(data, output_dir):
     group_names = sorted(group_counts.keys())
     group_values = [group_counts[g] for g in group_names]
 
-    # Jobs by event type
-    event_counts = defaultdict(int)
-    for j in active:
-        event_counts[j.get("event", "unknown")] += 1
-    event_names = sorted(event_counts.keys())
-    event_values = [event_counts[e] for e in event_names]
+    # Parallelization rate per runner group (from former capacity page)
+    sh_groups = {}
+    for g in config.get("label_groups", []):
+        if g.get("self_hosted"):
+            name = g["name"]
+            if name not in sh_groups:
+                sh_groups[name] = g.get("runner_count", 0)
+
+    group_parallel_per_day = defaultdict(list)
+    cap_avg_queue = []
+    cap_p50_queue = []
+    cap_p90_queue = []
+    cap_p95_queue = []
+
+    for date in dates:
+        djobs = jobs_by_date[date]
+        queues = sorted([j["queued_seconds"] for j in djobs if j.get("queued_seconds") and j["queued_seconds"] >= 0])
+        if queues:
+            cap_avg_queue.append(round(sum(queues) / len(queues) / 60, 1))
+            cap_p50_queue.append(round(queues[len(queues) // 2] / 60, 1))
+            cap_p90_queue.append(round(queues[int(len(queues) * 0.9)] / 60, 1))
+            cap_p95_queue.append(round(queues[int(len(queues) * 0.95)] / 60, 1))
+        else:
+            cap_avg_queue.append(0)
+            cap_p50_queue.append(0)
+            cap_p90_queue.append(0)
+            cap_p95_queue.append(0)
+
+        group_busy = defaultdict(float)
+        for j in djobs:
+            g = j.get("_group", "Other")
+            if g not in sh_groups:
+                continue
+            dur = j.get("duration_seconds")
+            if dur and dur > 0:
+                group_busy[g] += dur
+        for g in sorted(sh_groups):
+            group_parallel_per_day[g].append(round(group_busy[g] / 86400, 2))
+
+    colors = ["#0d6efd", "#28a745", "#ffc107", "#dc3545", "#6f42c1", "#fd7e14", "#20c997", "#e83e8c", "#17a2b8", "#6610f2"]
+    parallel_datasets = []
+    for i, g in enumerate(sorted(sh_groups)):
+        color = colors[i % len(colors)]
+        parallel_datasets.append({
+            "label": g,
+            "data": group_parallel_per_day[g],
+            "borderColor": color,
+            "backgroundColor": color + "33",
+            "fill": True,
+            "tension": 0.1,
+        })
+
+    table_rows = ""
+    for g in sorted(sh_groups):
+        vals = group_parallel_per_day[g]
+        avg = sum(vals) / len(vals) if vals else 0
+        peak = max(vals) if vals else 0
+        rc = sh_groups[g]
+        rc_str = str(rc) if rc > 0 else "dynamic"
+        table_rows += f"<tr><td>{g}</td><td>{rc_str}</td><td>{avg:.1f}</td><td>{peak:.1f}</td></tr>\n"
 
     # Build and test wait times per day
     build_wait_by_date = data.get("build_wait_by_date", {})
@@ -622,7 +673,16 @@ def generate_statistics(data, output_dir):
 
 {chart_section("byGroup", "Jobs by Runner Group", canvas_style="max-width:800px")}
 
-{chart_section("byEvent", "Jobs by Event Type", canvas_style="max-width:500px")}
+{chart_section("parallelRate", "Average Concurrent Runners (Parallelization Rate)",
+    "Total busy time / 24h per runner group.")}
+
+{chart_section("queueWait", "Queue Wait Time Percentiles (minutes)")}
+
+<h2>Runner Group Summary</h2>
+<table>
+  <tr><th>Group</th><th>Fleet Size</th><th>Avg Concurrent</th><th>Peak Concurrent</th></tr>
+  {table_rows}
+</table>
 
 <script src="{CHARTJS_CDN}"></script>
 <script>
@@ -794,14 +854,29 @@ new Chart(document.getElementById('byGroup_canvas').getContext('2d'), {{
   options: {{responsive:true, indexAxis:'y'}}
 }});
 
-// By event type (static)
-new Chart(document.getElementById('byEvent_canvas').getContext('2d'), {{
-  type: 'pie',
+// Parallelization rate
+new Chart(document.getElementById('parallelRate_canvas').getContext('2d'), {{
+  type: 'line',
   data: {{
-    labels: {json.dumps(event_names)},
-    datasets: [{{data:{json.dumps(event_values)}, backgroundColor:['#0d6efd','#28a745','#ffc107','#dc3545','#6f42c1','#fd7e14','#20c997','#e83e8c']}}]
+    labels: {json.dumps(dates)},
+    datasets: {json.dumps(parallel_datasets)}
   }},
-  options: {{responsive:true}}
+  options: {{responsive:true, scales:{{y:{{min:0,title:{{display:true,text:'Avg Concurrent Runners'}}}}}}}}
+}});
+
+// Queue wait time percentiles
+new Chart(document.getElementById('queueWait_canvas').getContext('2d'), {{
+  type: 'line',
+  data: {{
+    labels: {json.dumps(dates)},
+    datasets: [
+      {{label:'Avg', data:{json.dumps(cap_avg_queue)}, borderColor:'#0d6efd', fill:false, tension:0.1}},
+      {{label:'p50', data:{json.dumps(cap_p50_queue)}, borderColor:'#28a745', borderDash:[5,5], fill:false, tension:0.1}},
+      {{label:'p90', data:{json.dumps(cap_p90_queue)}, borderColor:'#ffc107', borderDash:[5,5], fill:false, tension:0.1}},
+      {{label:'p95', data:{json.dumps(cap_p95_queue)}, borderColor:'#dc3545', borderDash:[5,5], fill:false, tension:0.1}},
+    ]
+  }},
+  options: {{responsive:true, scales:{{y:{{title:{{display:true,text:'Minutes'}}}}}}}}
 }});
 </script>
 """
@@ -966,143 +1041,6 @@ function filterJobs() {{
         f.write(page_template(f"Timeline {month}", body, ""))
 
 
-# --- Capacity page ---
-
-
-def generate_capacity(data, config, output_dir):
-    """Generate capacity analysis page."""
-    dates = data["dates"]
-    jobs_by_date = data["jobs_by_date"]
-
-    # Find self-hosted groups and their configured runner counts.
-    sh_groups = {}  # name -> runner_count
-    for g in config.get("label_groups", []):
-        if g.get("self_hosted"):
-            name = g["name"]
-            if name not in sh_groups:
-                sh_groups[name] = g.get("runner_count", 0)
-
-    # Per-day parallelization rate: average concurrent runners busy
-    # = total_busy_seconds / 86400
-    # No dependency on fleet size — purely demand-driven.
-    group_parallel_per_day = defaultdict(list)
-    avg_queue_per_day = []
-    p50_queue = []
-    p90_queue = []
-    p95_queue = []
-
-    for date in dates:
-        djobs = jobs_by_date[date]
-
-        # Queue time percentiles
-        queues = sorted([j["queued_seconds"] for j in djobs if j.get("queued_seconds") and j["queued_seconds"] >= 0])
-        if queues:
-            avg_queue_per_day.append(round(sum(queues) / len(queues) / 60, 1))
-            p50_queue.append(round(queues[len(queues) // 2] / 60, 1))
-            p90_queue.append(round(queues[int(len(queues) * 0.9)] / 60, 1))
-            p95_queue.append(round(queues[int(len(queues) * 0.95)] / 60, 1))
-        else:
-            avg_queue_per_day.append(0)
-            p50_queue.append(0)
-            p90_queue.append(0)
-            p95_queue.append(0)
-
-        # Parallelization per group
-        group_busy = defaultdict(float)
-        for j in djobs:
-            g = j.get("_group", "Other")
-            if g not in sh_groups:
-                continue
-            dur = j.get("duration_seconds")
-            if dur and dur > 0:
-                group_busy[g] += dur
-
-        for g in sorted(sh_groups):
-            parallel = group_busy[g] / 86400
-            group_parallel_per_day[g].append(round(parallel, 2))
-
-    # Build datasets: parallelization line + capacity line per group
-    colors = ["#0d6efd", "#28a745", "#ffc107", "#dc3545", "#6f42c1", "#fd7e14", "#20c997", "#e83e8c", "#17a2b8", "#6610f2"]
-    parallel_datasets = []
-    for i, g in enumerate(sorted(sh_groups)):
-        color = colors[i % len(colors)]
-        parallel_datasets.append({
-            "label": g,
-            "data": group_parallel_per_day[g],
-            "borderColor": color,
-            "backgroundColor": color + "33",
-            "fill": True,
-            "tension": 0.1,
-        })
-        # Capacity line (not rendered for now, but data is available)
-        # rc = sh_groups[g]
-        # if rc > 0:
-        #     parallel_datasets.append({
-        #         "label": f"{g} capacity ({rc})",
-        #         "data": [rc] * len(dates),
-        #         "borderColor": color,
-        #         "borderDash": [4, 4],
-        #         "pointRadius": 0,
-        #         "fill": False,
-        #         "tension": 0,
-        #     })
-
-    # Summary table
-    table_rows = ""
-    for g in sorted(sh_groups):
-        vals = group_parallel_per_day[g]
-        avg = sum(vals) / len(vals) if vals else 0
-        peak = max(vals) if vals else 0
-        rc = sh_groups[g]
-        rc_str = str(rc) if rc > 0 else "dynamic"
-        table_rows += f"<tr><td>{g}</td><td>{rc_str}</td><td>{avg:.1f}</td><td>{peak:.1f}</td></tr>\n"
-
-    body = f"""
-<h1>Runner Capacity Analysis</h1>
-
-{chart_section("parallelRate", "Average Concurrent Runners (Parallelization Rate)",
-    "Total busy time / 24h per runner group.")}
-
-{chart_section("queueWait", "Queue Wait Time (minutes)")}
-
-<h2>Runner Group Summary</h2>
-<table>
-  <tr><th>Group</th><th>Fleet Size</th><th>Avg Concurrent</th><th>Peak Concurrent</th></tr>
-  {table_rows}
-</table>
-
-<script src="{CHARTJS_CDN}"></script>
-<script>
-{DOWNLOAD_JS}
-
-new Chart(document.getElementById('parallelRate_canvas').getContext('2d'), {{
-  type: 'line',
-  data: {{
-    labels: {json.dumps(dates)},
-    datasets: {json.dumps(parallel_datasets)}
-  }},
-  options: {{responsive:true, scales:{{y:{{min:0,title:{{display:true,text:'Avg Concurrent Runners'}}}}}}}}
-}});
-
-new Chart(document.getElementById('queueWait_canvas').getContext('2d'), {{
-  type: 'line',
-  data: {{
-    labels: {json.dumps(dates)},
-    datasets: [
-      {{label:'Avg', data:{json.dumps(avg_queue_per_day)}, borderColor:'#0d6efd', fill:false, tension:0.1}},
-      {{label:'p50', data:{json.dumps(p50_queue)}, borderColor:'#28a745', borderDash:[5,5], fill:false, tension:0.1}},
-      {{label:'p90', data:{json.dumps(p90_queue)}, borderColor:'#ffc107', borderDash:[5,5], fill:false, tension:0.1}},
-      {{label:'p95', data:{json.dumps(p95_queue)}, borderColor:'#dc3545', borderDash:[5,5], fill:false, tension:0.1}},
-    ]
-  }},
-  options: {{responsive:true, scales:{{y:{{title:{{display:true,text:'Minutes'}}}}}}}}
-}});
-</script>
-"""
-    with open(os.path.join(output_dir, "capacity.html"), "w") as f:
-        f.write(page_template("Capacity", body, "Capacity"))
-
-
 # --- Main ---
 
 
@@ -1129,10 +1067,7 @@ def main():
     generate_index(data, args.output)
 
     print("Generating statistics.html...")
-    generate_statistics(data, args.output)
-
-    print("Generating capacity.html...")
-    generate_capacity(data, config, args.output)
+    generate_statistics(data, config, args.output)
 
     for month in data["months"]:
         print(f"Generating month_{month}.html...")
