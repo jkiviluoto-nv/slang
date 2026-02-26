@@ -508,10 +508,14 @@ def generate_statistics(data, config, output_dir):
         durs = [j["duration_seconds"] for j in djobs if j.get("duration_seconds") and j["duration_seconds"] > 0]
         avg_duration_per_day.append(round(sum(durs) / len(durs) / 60, 1) if durs else 0)
 
-        queues = [j["queued_seconds"] for j in djobs if j.get("queued_seconds") and j["queued_seconds"] >= 0]
+        queues = [
+            j["queued_seconds"]
+            for j in djobs
+            if j.get("queued_seconds") is not None and j["queued_seconds"] >= 0
+        ]
         avg_queue_per_day.append(round(sum(queues) / len(queues) / 60, 1) if queues else 0)
 
-        total_day = s + f + c
+        total_day = s + f
         failure_rate_per_day.append(round(f / total_day * 100, 1) if total_day > 0 else 0)
 
     # 7-day moving average for duration
@@ -615,7 +619,13 @@ def generate_statistics(data, config, output_dir):
 
     for date in dates:
         djobs = jobs_by_date[date]
-        queues = sorted([j["queued_seconds"] for j in djobs if j.get("queued_seconds") and j["queued_seconds"] >= 0])
+        queues = sorted(
+            [
+                j["queued_seconds"]
+                for j in djobs
+                if j.get("queued_seconds") is not None and j["queued_seconds"] >= 0
+            ]
+        )
         if queues:
             cap_avg_queue.append(round(sum(queues) / len(queues) / 60, 1))
             cap_p50_queue.append(round(queues[len(queues) // 2] / 60, 1))
