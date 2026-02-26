@@ -54,6 +54,13 @@ runs:
         if command -v sccache &> /dev/null; then
           echo "✅ sccache already installed: $(sccache --version)"
         else
+          # Verify x64 architecture
+          arch="$(uname -m)"
+          if [[ "$arch" != "x86_64" && "$arch" != "amd64" ]]; then
+            echo "Unsupported Windows architecture: $arch"
+            exit 1
+          fi
+
           echo "Installing sccache for Windows..."
           install_dir="${RUNNER_TEMP}/sccache-bin"
           mkdir -p "$install_dir"
@@ -61,8 +68,7 @@ runs:
           cd "${RUNNER_TEMP}" && tar xzf sccache.tar.gz
           mv sccache-v0.7.4-x86_64-pc-windows-msvc/sccache.exe "$install_dir/sccache.exe"
           echo "$install_dir" >> "$GITHUB_PATH"
-          export PATH="$install_dir:$PATH"
-          sccache --version
+          "$install_dir/sccache.exe" --version
         fi
 
     # Configure sccache with local disk backend
@@ -78,6 +84,9 @@ runs:
         # Set platform-specific cache directory
         if [[ "${{ inputs.platform }}" == "windows" ]]; then
           SCCACHE_DIR="C:/sccache"
+          if ! mkdir -p "$SCCACHE_DIR" 2>/dev/null; then
+            SCCACHE_DIR="${RUNNER_TEMP}/sccache"
+          fi
         else
           SCCACHE_DIR="/tmp/.cache/sccache"
         fi
