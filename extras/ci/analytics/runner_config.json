@@ -13,6 +13,18 @@
       "runner_count": 5
     },
     {
+      "labels": ["Windows", "self-hosted", "neural"],
+      "name": "Windows GPU (GCP)",
+      "self_hosted": true,
+      "runner_count": 5
+    },
+    {
+      "labels": ["Windows", "self-hosted", "r581.80"],
+      "name": "Windows GPU (GCP)",
+      "self_hosted": true,
+      "runner_count": 5
+    },
+    {
       "labels": ["Windows", "self-hosted", "regression-test"],
       "name": "Windows test (GCP)",
       "self_hosted": true,
@@ -37,6 +49,18 @@
       "runner_count": 3
     },
     {
+      "labels": ["Linux", "self-hosted", "test-driver-upgrade"],
+      "name": "Linux GPU (GCP)",
+      "self_hosted": true,
+      "runner_count": 3
+    },
+    {
+      "labels": ["test-driver-upgrade"],
+      "name": "Linux GPU (GCP)",
+      "self_hosted": true,
+      "runner_count": 3
+    },
+    {
       "labels": ["ubuntu-22.04"],
       "name": "Linux (GH)",
       "self_hosted": false
@@ -44,6 +68,11 @@
     {
       "labels": ["ubuntu-latest"],
       "name": "Linux (GH)",
+      "self_hosted": false
+    },
+    {
+      "labels": ["ubuntu-22.04-arm"],
+      "name": "Linux ARM64 (GH)",
       "self_hosted": false
     },
     {
@@ -60,6 +89,17 @@
       "labels": ["windows-latest"],
       "name": "Windows (GH)",
       "self_hosted": false
+    },
+    {
+      "labels": ["windows-2022"],
+      "name": "Windows (GH)",
+      "self_hosted": false
+    },
+    {
+      "labels": ["slang-ubuntu-runner-2"],
+      "name": "Linux GPU (GCP)",
+      "self_hosted": true,
+      "runner_count": 3
     }
   ],
   "non_production_periods": {
