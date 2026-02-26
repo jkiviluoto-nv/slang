@@ -994,17 +994,18 @@ def generate_month_page(month, month_jobs, config, output_dir):
 
                 conclusion = job.get("conclusion", "")
                 color = CONCLUSION_COLORS.get(conclusion, "#6c757d")
-                name = html_mod.escape(job.get("name", ""))
-                wf = html_mod.escape(job.get("workflow_name", ""))
-                branch = html_mod.escape(job.get("head_branch", ""))
+                name = html_mod.escape(job.get("name", ""), quote=True)
+                wf = html_mod.escape(job.get("workflow_name", ""), quote=True)
+                branch = html_mod.escape(job.get("head_branch", ""), quote=True)
                 dur = format_duration((completed - started).total_seconds())
                 queue = format_duration(job.get("queued_seconds"))
                 url = html_mod.escape(job.get("html_url", ""), quote=True)
 
-                tooltip = f"{name}\\n{wf} / {branch}\\nDuration: {dur}, Queue: {queue}\\nConclusion: {conclusion}"
+                conclusion_esc = html_mod.escape(conclusion, quote=True)
+                tooltip = f"{name}\\n{wf} / {branch}\\nDuration: {dur}, Queue: {queue}\\nConclusion: {conclusion_esc}"
 
                 rows_html.append(
-                    f'<a href="{url}" target="_blank" '
+                    f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
                     f'class="job-block" '
                     f'data-wf="{wf}" data-branch="{branch}" '
                     f'style="position:absolute;left:{left}px;top:{top + 2}px;'
