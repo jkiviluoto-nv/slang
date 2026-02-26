@@ -193,7 +193,9 @@ def generate_health_html(queue_data, failures, output_dir):
                     wait_str = f"{wait_s}s"
                 name = j.get("name", "")
                 branch = j.get("branch", "")
-                queue_html += f"<tr><td>{wait_str}</td><td>{name}</td><td>{branch}</td></tr>\n"
+                url = j.get("html_url", "")
+                name_html = f'<a href="{url}" target="_blank">{name}</a>' if url else name
+                queue_html += f"<tr><td>{wait_str}</td><td>{name_html}</td><td>{branch}</td></tr>\n"
             queue_html += "</table>\n"
     else:
         queue_html = "<p>Could not fetch queue status.</p>"

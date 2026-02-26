@@ -528,6 +528,7 @@ def build_json_output(queued_runs, inprogress_runs, all_jobs, runners, runners_a
                 "workflow": job.get("_workflow", ""),
                 "created_at": job.get("created_at"),
                 "runner_name": job.get("runner_name"),
+                "html_url": job.get("html_url", ""),
             }
         )
 
