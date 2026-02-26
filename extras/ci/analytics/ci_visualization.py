@@ -119,6 +119,7 @@ def nav_html(active=""):
     links = [
         ("index.html", "Home"),
         ("statistics.html", "Statistics"),
+        ("health.html", "Health"),
     ]
     items = []
     for href, label in links:
@@ -1077,6 +1078,25 @@ function filterJobs() {{
         f.write(page_template(f"Timeline {month}", body, ""))
 
 
+# --- Health page ---
+
+
+def generate_health(output_dir):
+    """Generate placeholder health page for CI system status."""
+    body = """
+<h1>CI System Health</h1>
+<p style="color:#6c757d">Live status of CI infrastructure. Updated more frequently than statistics.</p>
+
+<h2>Runner Status</h2>
+<p>Coming soon: live status of GCP VM runners, GitHub-hosted runner availability, and queue depth.</p>
+
+<h2>Recent Incidents</h2>
+<p>Coming soon: recent CI outages, runner failures, and recovery times.</p>
+"""
+    with open(os.path.join(output_dir, "health.html"), "w") as f:
+        f.write(page_template("Health", body, "Health"))
+
+
 # --- Main ---
 
 
@@ -1104,6 +1124,9 @@ def main():
 
     print("Generating statistics.html...")
     generate_statistics(data, config, args.output)
+
+    print("Generating health.html...")
+    generate_health(args.output)
 
     for month in data["months"]:
         print(f"Generating month_{month}.html...")
