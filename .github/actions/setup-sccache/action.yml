@@ -55,9 +55,13 @@ runs:
           echo "✅ sccache already installed: $(sccache --version)"
         else
           echo "Installing sccache for Windows..."
-          curl -L -o /tmp/sccache.tar.gz https://github.com/mozilla/sccache/releases/download/v0.7.4/sccache-v0.7.4-x86_64-pc-windows-msvc.tar.gz
-          cd /tmp && tar xzf sccache.tar.gz
-          mv sccache-v0.7.4-x86_64-pc-windows-msvc/sccache.exe /usr/bin/sccache.exe
+          install_dir="${RUNNER_TEMP}/sccache-bin"
+          mkdir -p "$install_dir"
+          curl -L -o "${RUNNER_TEMP}/sccache.tar.gz" https://github.com/mozilla/sccache/releases/download/v0.7.4/sccache-v0.7.4-x86_64-pc-windows-msvc.tar.gz
+          cd "${RUNNER_TEMP}" && tar xzf sccache.tar.gz
+          mv sccache-v0.7.4-x86_64-pc-windows-msvc/sccache.exe "$install_dir/sccache.exe"
+          echo "$install_dir" >> "$GITHUB_PATH"
+          export PATH="$install_dir:$PATH"
           sccache --version
         fi
 
@@ -68,9 +72,14 @@ runs:
         echo "SCCACHE_CACHE_ZSTD_LEVEL=3" >> $GITHUB_ENV
         echo "SCCACHE_IGNORE_SERVER_IO_ERROR=1" >> $GITHUB_ENV
         echo "SCCACHE_IDLE_TIMEOUT=0" >> $GITHUB_ENV
-        echo "SCCACHE_DIR=/tmp/.cache/sccache" >> $GITHUB_ENV
         echo "SCCACHE_BASE_DIR=$PWD" >> $GITHUB_ENV
         echo "SCCACHE_CACHE_SIZE=2G" >> $GITHUB_ENV
+
+        # Use RUNNER_TEMP for cache directory (works on all platforms)
+        SCCACHE_DIR="${RUNNER_TEMP:-/tmp}/.cache/sccache"
+        mkdir -p "$SCCACHE_DIR"
+        echo "SCCACHE_DIR=$SCCACHE_DIR" >> $GITHUB_ENV
+        echo "sccache_cache_dir=$SCCACHE_DIR" >> $GITHUB_ENV
 
         # Get sccache path for CMake
         sccache_path=$(which sccache)

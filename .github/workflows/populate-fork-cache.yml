@@ -313,6 +313,7 @@ jobs:
       runs-on: '["Windows", "self-hosted", "GCP-T4"]'
       warnings-as-errors: true
       build-llvm: true
+      save-sccache: true
 
   build-windows-debug:
     needs: check-changes
@@ -329,6 +330,7 @@ jobs:
       runs-on: '["Windows", "self-hosted", "GCP-T4"]'
       warnings-as-errors: true
       build-llvm: true
+      save-sccache: true
 
   mark-cached:
     needs:

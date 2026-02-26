@@ -30,6 +30,11 @@ on:
         required: false
         type: number
         default: 8
+      save-sccache:
+        description: "Save sccache to GitHub Actions cache (for populate-fork-cache on master)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -56,7 +61,7 @@ jobs:
       - name: Restore sccache cache
         uses: actions/cache/restore@v4
         with:
-          path: /tmp/.cache/sccache
+          path: ${{ runner.temp }}/.cache/sccache
           key: sccache-${{ inputs.os }}-${{ inputs.compiler }}-${{ inputs.platform }}-${{ inputs.config }}-${{ github.sha }}
           restore-keys: |
             sccache-${{ inputs.os }}-${{ inputs.compiler }}-${{ inputs.platform }}-${{ inputs.config }}-
@@ -279,4 +284,10 @@ jobs:
           path: artifacts-staging/
           retention-days: 1
 
-      # Note: sccache cache for all PRs is populated by populate-fork-cache.yml on master
+      # Save sccache cache (only when explicitly requested, e.g. from populate-fork-cache on master)
+      - name: Save sccache cache
+        if: inputs.save-sccache && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.sccache_cache_dir }}
+          key: sccache-${{ inputs.os }}-${{ inputs.compiler }}-${{ inputs.platform }}-${{ inputs.config }}-${{ github.sha }}
