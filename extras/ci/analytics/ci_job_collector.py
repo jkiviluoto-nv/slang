@@ -59,6 +59,12 @@ def parse_args():
     parser.add_argument(
         "--verbose", action="store_true", help="Enable verbose output"
     )
+    parser.add_argument(
+        "--max-job-fetch-error-rate",
+        type=float,
+        default=0.05,
+        help="Maximum tolerated fraction of run job-fetch failures before exiting non-zero (default: 0.05).",
+    )
     return parser.parse_args()
 
 
@@ -220,8 +226,8 @@ def fetch_jobs_for_run(repo, run_id):
         "jobs",
     )
     if err:
-        return []
-    return jobs if isinstance(jobs, list) else []
+        return [], err
+    return (jobs if isinstance(jobs, list) else []), None
 
 
 def extract_job_data(job, run):
@@ -283,6 +289,8 @@ def collect_jobs(repo, runs, output_path=None, existing=None, verbose=False):
 
     print(f"Fetching jobs for {total} runs...", file=sys.stderr)
 
+    failed_job_fetches = 0
+    failed_run_ids = []
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {
             executor.submit(fetch_jobs_for_run, repo, run["id"]): run
@@ -292,7 +300,18 @@ def collect_jobs(repo, runs, output_path=None, existing=None, verbose=False):
         done = 0
         for future in as_completed(futures):
             run = futures[future]
-            jobs = future.result()
+            jobs, err = future.result()
+            if err:
+                failed_job_fetches += 1
+                if len(failed_run_ids) < 10:
+                    failed_run_ids.append(run["id"])
+                if verbose:
+                    print(
+                        f"  Warning: failed to fetch jobs for run {run['id']}: {err}",
+                        file=sys.stderr,
+                    )
+                done += 1
+                continue
             for job in jobs:
                 if job.get("status") == "completed" and job["id"] not in existing_ids:
                     all_jobs.append(extract_job_data(job, run))
@@ -312,7 +331,7 @@ def collect_jobs(repo, runs, output_path=None, existing=None, verbose=False):
                     file=sys.stderr,
                 )
 
-    return all_jobs
+    return all_jobs, failed_job_fetches, failed_run_ids
 
 
 def merge_data(existing, new_data, verbose=False):
@@ -373,11 +392,32 @@ def main():
         print(f"Filtered to '{args.workflow}' workflow: {len(runs)} of {before} runs")
 
     # Fetch jobs for all runs (with incremental saves)
-    merged = collect_jobs(
+    merged, failed_job_fetches, failed_run_ids = collect_jobs(
         args.repo, runs, args.output, existing, args.verbose
     )
     new_count = len(merged) - existing_count
     save_data(merged, args.output)
+
+    total_runs = len(runs)
+    error_rate = (failed_job_fetches / total_runs) if total_runs else 0
+    if failed_job_fetches:
+        print(
+            f"Warning: failed to fetch jobs for {failed_job_fetches}/{total_runs} runs "
+            f"({error_rate * 100:.1f}%).",
+            file=sys.stderr,
+        )
+        if failed_run_ids:
+            print(
+                f"Sample failed run IDs: {', '.join(str(i) for i in failed_run_ids)}",
+                file=sys.stderr,
+            )
+    if error_rate > args.max_job_fetch_error_rate:
+        print(
+            f"Error: job fetch error rate {error_rate * 100:.1f}% exceeds allowed "
+            f"{args.max_job_fetch_error_rate * 100:.1f}%",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
     print(f"Added {new_count} new jobs (total: {len(merged)})")
     print(f"Data saved to: {args.output}")

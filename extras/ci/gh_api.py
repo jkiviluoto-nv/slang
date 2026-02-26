@@ -8,12 +8,46 @@ correctly for GitHub's concatenated JSON output format.
 import json
 import subprocess
 import sys
+import time
+
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 2
+
+
+def _is_retryable_error(stderr):
+    text = (stderr or "").lower()
+    retry_markers = [
+        "timed out",
+        "timeout",
+        "connection reset",
+        "temporary failure",
+        "service unavailable",
+        "bad gateway",
+        "gateway timeout",
+        "secondary rate limit",
+        "api rate limit exceeded",
+    ]
+    return any(marker in text for marker in retry_markers)
+
+
+def _run_gh_command(cmd):
+    """Run a gh command with retry for transient failures."""
+    last_result = None
+    for attempt in range(MAX_RETRIES):
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        last_result = result
+        if result.returncode == 0:
+            return result
+        if not _is_retryable_error(result.stderr) or attempt == MAX_RETRIES - 1:
+            return result
+        time.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
+    return last_result
 
 
 def gh_api(endpoint):
     """Call gh api (single request) and return (parsed_json, error_string)."""
     cmd = ["gh", "api", endpoint]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = _run_gh_command(cmd)
     if result.returncode != 0:
         return None, result.stderr.strip()
     try:
@@ -48,7 +82,7 @@ def gh_api_list(endpoint, key):
     (e.g. "jobs", "workflow_runs", "runners").
     """
     cmd = ["gh", "api", "--paginate", endpoint]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = _run_gh_command(cmd)
     if result.returncode != 0:
         return None, result.stderr.strip()
 
