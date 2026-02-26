@@ -416,7 +416,7 @@ if(NOT CMAKE_C_COMPILER_LAUNCHER AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
         AND DEFINED ENV{SLANG_USE_SCCACHE}
         AND "$ENV{SLANG_USE_SCCACHE}"
     )
-        set(SLANG_USE_SCCACHE ON)
+        set(SLANG_USE_SCCACHE ON CACHE BOOL "" FORCE)
     endif()
     if(SLANG_USE_SCCACHE)
         find_program(SCCACHE_PROGRAM sccache)
@@ -424,6 +424,8 @@ if(NOT CMAKE_C_COMPILER_LAUNCHER AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
             message(STATUS "Using sccache: ${SCCACHE_PROGRAM}")
             set(CMAKE_C_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
             set(CMAKE_CXX_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+            # Re-run the MSVC debug-info workaround now that the launcher is set
+            include(CCacheDebugInfoWorkaround)
             # Disable PCH: sccache + PCH causes linker errors
             if(SLANG_ENABLE_PCH)
                 message(
