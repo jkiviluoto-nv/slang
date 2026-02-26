@@ -603,8 +603,13 @@ def generate_statistics(data, config, output_dir):
 
     colors = ["#0d6efd", "#28a745", "#ffc107", "#dc3545", "#6f42c1", "#fd7e14", "#20c997", "#e83e8c", "#17a2b8", "#6610f2"]
     parallel_datasets = []
-    for i, g in enumerate(sorted(sh_groups)):
-        color = colors[i % len(colors)]
+    ci = 0
+    for g in sorted(sh_groups):
+        # Only include groups that have actual data
+        if not any(v > 0 for v in group_parallel_per_day[g]):
+            continue
+        color = colors[ci % len(colors)]
+        ci += 1
         parallel_datasets.append({
             "label": g,
             "data": group_parallel_per_day[g],
