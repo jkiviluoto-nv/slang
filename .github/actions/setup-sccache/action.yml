@@ -75,8 +75,12 @@ runs:
         echo "SCCACHE_BASE_DIR=$PWD" >> $GITHUB_ENV
         echo "SCCACHE_CACHE_SIZE=2G" >> $GITHUB_ENV
 
-        # Use RUNNER_TEMP for cache directory (works on all platforms)
-        SCCACHE_DIR="${RUNNER_TEMP:-/tmp}/.cache/sccache"
+        # Set platform-specific cache directory
+        if [[ "${{ inputs.platform }}" == "windows" ]]; then
+          SCCACHE_DIR="C:/sccache"
+        else
+          SCCACHE_DIR="/tmp/.cache/sccache"
+        fi
         mkdir -p "$SCCACHE_DIR"
         echo "SCCACHE_DIR=$SCCACHE_DIR" >> $GITHUB_ENV
         echo "sccache_cache_dir=$SCCACHE_DIR" >> $GITHUB_ENV

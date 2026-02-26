@@ -61,7 +61,7 @@ jobs:
       - name: Restore sccache cache
         uses: actions/cache/restore@v4
         with:
-          path: ${{ runner.temp }}/.cache/sccache
+          path: ${{ inputs.os == 'windows' && 'C:/sccache' || '/tmp/.cache/sccache' }}
           key: sccache-${{ inputs.os }}-${{ inputs.compiler }}-${{ inputs.platform }}-${{ inputs.config }}-${{ github.sha }}
           restore-keys: |
             sccache-${{ inputs.os }}-${{ inputs.compiler }}-${{ inputs.platform }}-${{ inputs.config }}-
@@ -289,5 +289,5 @@ jobs:
         if: inputs.save-sccache && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         uses: actions/cache/save@v4
         with:
-          path: ${{ env.sccache_cache_dir }}
+          path: ${{ inputs.os == 'windows' && 'C:/sccache' || '/tmp/.cache/sccache' }}
           key: sccache-${{ inputs.os }}-${{ inputs.compiler }}-${{ inputs.platform }}-${{ inputs.config }}-${{ github.sha }}
