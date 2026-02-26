@@ -33,18 +33,18 @@ DEFAULT_TOP_WAITING = 15
 # Checked top-to-bottom; first match where required_labels is a subset of
 # the job's labels wins.
 DEFAULT_LABEL_GROUPS = [
-    ({"Linux", "self-hosted", "GPU"}, "Linux GPU (self-hosted)", True),
-    ({"Windows", "self-hosted", "GCP-T4"}, "Windows GPU (self-hosted, org)", True),
+    ({"Linux", "self-hosted", "GPU"}, "Linux GPU (GCP)", True),
+    ({"Windows", "self-hosted", "GCP-T4"}, "Windows GPU (GCP)", True),
     # These Windows runners share the same physical machines (SLANGWIN*)
-    ({"Windows", "self-hosted", "regression-test"}, "Windows test (self-hosted)", True),
-    ({"Windows", "self-hosted", "benchmark"}, "Windows test (self-hosted)", True),
-    ({"Windows", "self-hosted", "falcor"}, "Windows test (self-hosted)", True),
-    ({"Windows", "self-hosted", "perf"}, "Windows test (self-hosted)", True),
-    ({"ubuntu-22.04"}, "GitHub Linux x64", False),
-    ({"ubuntu-latest"}, "GitHub Linux x64", False),
-    ({"ubuntu-24.04-arm"}, "GitHub Linux ARM64", False),
-    ({"macos-latest"}, "GitHub macOS", False),
-    ({"windows-latest"}, "GitHub Windows", False),
+    ({"Windows", "self-hosted", "regression-test"}, "Windows test (GCP)", True),
+    ({"Windows", "self-hosted", "benchmark"}, "Windows test (GCP)", True),
+    ({"Windows", "self-hosted", "falcor"}, "Windows test (GCP)", True),
+    ({"Windows", "self-hosted", "perf"}, "Windows test (GCP)", True),
+    ({"ubuntu-22.04"}, "Linux (GH)", False),
+    ({"ubuntu-latest"}, "Linux (GH)", False),
+    ({"ubuntu-24.04-arm"}, "Linux ARM64 (GH)", False),
+    ({"macos-latest"}, "macOS (GH)", False),
+    ({"windows-latest"}, "Windows (GH)", False),
 ]
 
 
