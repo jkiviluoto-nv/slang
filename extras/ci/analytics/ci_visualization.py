@@ -84,13 +84,18 @@ def load_config():
         sys.exit(2)
 
 
-def classify_group(labels, config):
-    """Map job labels to a runner group name."""
+def classify_group(labels, config, runner_name=""):
+    """Map job labels (or runner name) to a runner group name."""
     label_set = set(labels) if labels else set()
     for group in config.get("label_groups", []):
         required = set(group["labels"])
         if required <= label_set:
             return group["name"], group.get("self_hosted", False)
+    # Fall back to runner name prefix matching (for scale set runners with empty labels)
+    if runner_name:
+        for prefix_group in config.get("runner_name_prefixes", []):
+            if runner_name.startswith(prefix_group["prefix"]):
+                return prefix_group["name"], prefix_group.get("self_hosted", False)
     return "Other", False
 
 
@@ -249,7 +254,7 @@ def process_jobs(jobs_data, config):
 
     # Classify runner groups
     for job in jobs_data:
-        group, is_sh = classify_group(job.get("labels", []), config)
+        group, is_sh = classify_group(job.get("labels", []), config, job.get("runner_name", ""))
         job["_group"] = group
         job["_self_hosted"] = is_sh
 

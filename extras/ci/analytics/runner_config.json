@@ -3,62 +3,57 @@
     {
       "labels": ["Linux", "self-hosted", "GPU"],
       "name": "Linux GPU (GCP)",
-      "self_hosted": true,
-      "runner_count": 3
+      "self_hosted": true
     },
     {
       "labels": ["Windows", "self-hosted", "GCP-T4"],
       "name": "Windows GPU (GCP)",
-      "self_hosted": true,
-      "runner_count": 5
+      "self_hosted": true
     },
     {
       "labels": ["Windows", "self-hosted", "neural"],
       "name": "Windows GPU (GCP)",
-      "self_hosted": true,
-      "runner_count": 5
+      "self_hosted": true
     },
     {
       "labels": ["Windows", "self-hosted", "r581.80"],
       "name": "Windows GPU (GCP)",
-      "self_hosted": true,
-      "runner_count": 5
+      "self_hosted": true
     },
     {
       "labels": ["Windows", "self-hosted", "regression-test"],
       "name": "Windows test (GCP)",
-      "self_hosted": true,
-      "runner_count": 3
+      "self_hosted": true
     },
     {
       "labels": ["Windows", "self-hosted", "benchmark"],
       "name": "Windows test (GCP)",
-      "self_hosted": true,
-      "runner_count": 3
+      "self_hosted": true
     },
     {
       "labels": ["Windows", "self-hosted", "falcor"],
       "name": "Windows test (GCP)",
-      "self_hosted": true,
-      "runner_count": 3
+      "self_hosted": true
     },
     {
       "labels": ["Windows", "self-hosted", "perf"],
       "name": "Windows test (GCP)",
-      "self_hosted": true,
-      "runner_count": 3
+      "self_hosted": true
     },
     {
       "labels": ["Linux", "self-hosted", "test-driver-upgrade"],
       "name": "Linux GPU (GCP)",
-      "self_hosted": true,
-      "runner_count": 3
+      "self_hosted": true
     },
     {
       "labels": ["test-driver-upgrade"],
       "name": "Linux GPU (GCP)",
-      "self_hosted": true,
-      "runner_count": 3
+      "self_hosted": true
+    },
+    {
+      "labels": ["slang-ubuntu-runner-2"],
+      "name": "Linux GPU (GCP)",
+      "self_hosted": true
     },
     {
       "labels": ["ubuntu-22.04"],
@@ -94,12 +89,23 @@
       "labels": ["windows-2022"],
       "name": "Windows (GH)",
       "self_hosted": false
+    }
+  ],
+  "runner_name_prefixes": [
+    {
+      "prefix": "linux-runner-",
+      "name": "Linux GPU (GCP)",
+      "self_hosted": true
     },
     {
-      "labels": ["slang-ubuntu-runner-2"],
-      "name": "Linux GPU (GCP)",
-      "self_hosted": true,
-      "runner_count": 3
+      "prefix": "win-runner-",
+      "name": "Windows GPU (GCP)",
+      "self_hosted": true
+    },
+    {
+      "prefix": "gpu-scaler-host",
+      "name": "Scale Set Host",
+      "self_hosted": true
     }
   ],
   "non_production_periods": {
