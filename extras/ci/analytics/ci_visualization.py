@@ -405,6 +405,7 @@ def generate_index(data, output_dir):
 
     body = f"""
 <h1>Slang CI Analytics</h1>
+<p style="color:#6c757d">CI workflow only. Excludes skipped jobs. Data range: {dates[0] if dates else 'N/A'} to {dates[-1] if dates else 'N/A'}.</p>
 <h2>Last 3 Days</h2>
 <div>
   <div class="stat-card"><div class="value">{ci_tat_3d:.0f}m</div><div class="label">CI Turnaround (avg)</div></div>
@@ -413,12 +414,6 @@ def generate_index(data, output_dir):
   <div class="stat-card"><div class="value">{bw_3d:.1f}m</div><div class="label">Build Wait</div></div>
   <div class="stat-card"><div class="value">{tw_3d:.1f}m</div><div class="label">Test Wait (after build)</div></div>
 </div>
-<h2>Overall</h2>
-<div>
-  <div class="stat-card"><div class="value">{total}</div><div class="label">Total Jobs</div></div>
-  <div class="stat-card"><div class="value">{success_rate:.1f}%</div><div class="label">Success Rate</div></div>
-</div>
-<p style="color:#6c757d;margin-top:10px">CI workflow only. Excludes skipped jobs. Data range: {dates[0] if dates else 'N/A'} to {dates[-1] if dates else 'N/A'}</p>
 
 <h2>Pages</h2>
 <ul>
@@ -642,7 +637,7 @@ def generate_statistics(data, config, output_dir):
 
     body = f"""
 <h1>Statistics &amp; Trends</h1>
-<p style="color:#6c757d">CI workflow only. Excludes skipped jobs.</p>
+<p style="color:#6c757d">CI workflow only. Excludes skipped jobs. Data range: {dates[0] if dates else 'N/A'} to {dates[-1] if dates else 'N/A'}.</p>
 
 <div style="margin-bottom:15px">
   <label>Date range: </label>
