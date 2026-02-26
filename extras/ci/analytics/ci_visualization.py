@@ -717,7 +717,7 @@ def generate_statistics(data, config, output_dir):
     "Average number of self-hosted runners busy at any moment, per group. Computed as total busy time / 24h.")}
 
 {chart_section("queueWait", "Queue Wait Time Percentiles (minutes)",
-    "Average, median (p50), p90, and p95 queue wait times per day.")}
+    "Time each job spent waiting in the CI queue for a runner before execution started. Shows average, median (p50), p90, and p95 per day.")}
 
 
 <script src="{CHARTJS_CDN}"></script>
