@@ -371,32 +371,65 @@ def generate_index(data, output_dir):
     success = sum(1 for j in active if j.get("conclusion") == "success")
     success_rate = (success / total * 100) if total > 0 else 0
 
-    # Last 3 days key figures
-    ci_tat_3d = _avg_last_n_days(data.get("ci_turnaround_by_date", {}), dates, 3)
+    # Compute metrics for a 3-day window
+    def _compute_3d_metrics(window_dates):
+        tat = 0
+        ci_tat_data = data.get("ci_turnaround_by_date", {})
+        tat_vals = []
+        for d in window_dates:
+            tat_vals.extend(ci_tat_data.get(d, []))
+        tat = sum(tat_vals) / len(tat_vals) if tat_vals else 0
 
-    # Active PRs: count unique PR branches in last 3 days
+        pr_branches = set()
+        for d in window_dates:
+            for j in data["jobs_by_date"].get(d, []):
+                if ci_filter(j) and j.get("event") == "pull_request" and j.get("head_branch"):
+                    pr_branches.add(j["head_branch"])
+        prs = len(pr_branches) / len(window_dates) if window_dates else 0
+
+        s, f = 0, 0
+        for d in window_dates:
+            for j in data["jobs_by_date"].get(d, []):
+                if not ci_filter(j):
+                    continue
+                c = j.get("conclusion")
+                if c == "success":
+                    s += 1
+                elif c == "failure":
+                    f += 1
+        total_sf = s + f
+        fr = (f / total_sf * 100) if total_sf > 0 else 0
+        return tat, prs, fr
+
     recent_dates = dates[-3:] if len(dates) >= 3 else dates
-    pr_branches = set()
-    for d in recent_dates:
-        for j in data["jobs_by_date"].get(d, []):
-            if ci_filter(j) and j.get("event") == "pull_request" and j.get("head_branch"):
-                pr_branches.add(j["head_branch"])
-    prs_3d = len(pr_branches) / len(recent_dates) if recent_dates else 0
+    prev_dates = dates[-6:-3] if len(dates) >= 6 else []
 
-    # Failure rate last 3 days (failures only, not cancelled)
-    recent_success = 0
-    recent_failure = 0
-    for d in recent_dates:
-        for j in data["jobs_by_date"].get(d, []):
-            if not ci_filter(j):
-                continue
-            c = j.get("conclusion")
-            if c == "success":
-                recent_success += 1
-            elif c == "failure":
-                recent_failure += 1
-    recent_total = recent_success + recent_failure
-    failure_rate_3d = (recent_failure / recent_total * 100) if recent_total > 0 else 0
+    ci_tat_3d, prs_3d, failure_rate_3d = _compute_3d_metrics(recent_dates)
+    ci_tat_prev, prs_prev, failure_rate_prev = _compute_3d_metrics(prev_dates)
+
+    def _delta_str(current, previous, unit="", invert=False):
+        """Format a delta value. invert=True means lower is better."""
+        if not previous:
+            return ""
+        diff = current - previous
+        if abs(diff) < 0.05:
+            return '<span style="color:#6c757d;font-size:0.6em"> (flat)</span>'
+        if invert:
+            color = "#28a745" if diff < 0 else "#dc3545"
+        else:
+            color = "#28a745" if diff > 0 else "#dc3545"
+        sign = "+" if diff > 0 else ""
+        if unit == "%":
+            txt = f"{sign}{diff:.1f}pp"
+        elif unit == "m":
+            txt = f"{sign}{diff:.0f}m"
+        else:
+            txt = f"{sign}{diff:.1f}"
+        return f'<span style="color:{color};font-size:0.6em"> ({txt})</span>'
+
+    tat_delta = _delta_str(ci_tat_3d, ci_tat_prev, "m", invert=True)
+    prs_delta = _delta_str(prs_3d, prs_prev)
+    fr_delta = _delta_str(failure_rate_3d, failure_rate_prev, "%", invert=True)
 
     months_html = ""
     for month in reversed(data["months"]):
@@ -408,9 +441,9 @@ def generate_index(data, output_dir):
 <p style="color:#6c757d">CI workflow only. Excludes skipped jobs. Data range: {dates[0] if dates else 'N/A'} to {dates[-1] if dates else 'N/A'}.</p>
 <h2>Last 3 Days</h2>
 <div>
-  <div class="stat-card"><div class="value">{ci_tat_3d:.0f}m</div><div class="label">CI Turnaround (avg)</div></div>
-  <div class="stat-card"><div class="value">{prs_3d:.0f}</div><div class="label">Active PRs / day</div></div>
-  <div class="stat-card"><div class="value">{failure_rate_3d:.1f}%</div><div class="label">Failure Rate</div></div>
+  <div class="stat-card"><div class="value">{ci_tat_3d:.0f}m{tat_delta}</div><div class="label">CI Turnaround (avg)</div></div>
+  <div class="stat-card"><div class="value">{prs_3d:.0f}{prs_delta}</div><div class="label">Active PRs / day</div></div>
+  <div class="stat-card"><div class="value">{failure_rate_3d:.1f}%{fr_delta}</div><div class="label">Failure Rate</div></div>
 </div>
 
 <h2>Pages</h2>
