@@ -135,6 +135,10 @@ def get_start_date(days_str, existing_data, verbose=False):
 API_PAGINATION_CAP = 1000
 
 
+class DataCompletenessError(RuntimeError):
+    """Raised when API pagination limits prevent complete data collection."""
+
+
 def resolve_workflow_id(repo, workflow_name):
     """Resolve a workflow name to workflow id."""
     workflows, err = gh_api_list(
@@ -198,6 +202,10 @@ def _fetch_runs_window(repo, date_from, date_to, seen_ids, workflow_id=None, dep
             left = _fetch_runs_window(repo, date_from, mid, seen_ids, workflow_id, depth + 1)
             right = _fetch_runs_window(repo, mid, date_to, seen_ids, workflow_id, depth + 1)
             return new_runs + left + right
+        raise DataCompletenessError(
+            f"Window {from_str}..{to_str} returned {len(runs)} runs and cannot be split further "
+            f"without risking missing data."
+        )
 
     for r in new_runs:
         seen_ids.add(r["id"])
@@ -408,7 +416,11 @@ def main():
                 file=sys.stderr,
             )
 
-    runs = fetch_completed_runs(args.repo, start_date, workflow_id, args.verbose)
+    try:
+        runs = fetch_completed_runs(args.repo, start_date, workflow_id, args.verbose)
+    except DataCompletenessError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
     if not runs:
         print("No completed runs found in the specified time range.")
         if existing_count > 0:
