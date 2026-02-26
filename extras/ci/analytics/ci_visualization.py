@@ -363,7 +363,9 @@ def _avg_last_n_days(by_date, dates, n):
 
 
 def generate_index(data, output_dir):
-    active = data["active_jobs"]
+    # Filter to CI workflow only
+    ci_filter = lambda j: j.get("workflow_name") == "CI"
+    active = [j for j in data["active_jobs"] if ci_filter(j)]
     dates = data["dates"]
     total = len(active)
     success = sum(1 for j in active if j.get("conclusion") == "success")
@@ -377,7 +379,7 @@ def generate_index(data, output_dir):
     pr_branches = set()
     for d in recent_dates:
         for j in data["jobs_by_date"].get(d, []):
-            if j.get("event") == "pull_request" and j.get("head_branch"):
+            if ci_filter(j) and j.get("event") == "pull_request" and j.get("head_branch"):
                 pr_branches.add(j["head_branch"])
     prs_3d = len(pr_branches) / len(recent_dates) if recent_dates else 0
 
@@ -385,6 +387,8 @@ def generate_index(data, output_dir):
     queue_vals = []
     for d in recent_dates:
         for j in data["jobs_by_date"].get(d, []):
+            if not ci_filter(j):
+                continue
             q = j.get("queued_seconds")
             if q and q >= 0:
                 queue_vals.append(q / 60)
@@ -435,8 +439,14 @@ def generate_index(data, output_dir):
 
 def generate_statistics(data, config, output_dir):
     dates = data["dates"]
-    jobs_by_date = data["jobs_by_date"]
-    active = data["active_jobs"]
+
+    # Filter everything to CI workflow only
+    ci_filter = lambda j: j.get("workflow_name") == "CI"
+    active = [j for j in data["active_jobs"] if ci_filter(j)]
+    jobs_by_date = {
+        d: [j for j in jobs if ci_filter(j)]
+        for d, jobs in data["jobs_by_date"].items()
+    }
 
     # Per-day stats
     labels_json = json.dumps(dates)
