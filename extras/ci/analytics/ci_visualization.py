@@ -646,7 +646,8 @@ def generate_statistics(data, config, output_dir):
 {chart_section("turnaround", "CI Turnaround Time (minutes)",
     "Main CI workflow only. Time from workflow trigger to last job completed per run. Speed of light = max(build+test) across platforms, assuming full parallelization.")}
 
-{chart_section("prsPerDay", "Active PRs per Day")}
+{chart_section("prsPerDay", "Active PRs per Day",
+    "Unique PR branches with CI activity per day.")}
 
 {chart_section("buildTestWait", "Build and Test Wait Times (minutes)",
     "Build wait: run trigger to first build started. Test wait: last build completed to first test started (worst platform).")}
@@ -657,22 +658,29 @@ def generate_statistics(data, config, output_dir):
 {chart_section("testByOs", "Test Duration by OS (minutes)",
     "Average test job duration per day, CI workflow only.")}
 
-{chart_section("jobsPerDay", "Jobs per Day")}
+{chart_section("jobsPerDay", "Jobs per Day",
+    "Stacked by conclusion: success, failure, cancelled.")}
 
-{chart_section("runsPerDay", "Workflow Runs per Day")}
+{chart_section("runsPerDay", "Workflow Runs per Day",
+    "Number of distinct CI workflow runs per day.")}
 
-{chart_section("avgDuration", "Average Job Duration (minutes)")}
+{chart_section("avgDuration", "Average Job Duration (minutes)",
+    "Mean duration across all jobs per day, with 7-day moving average.")}
 
-{chart_section("avgQueue", "Average Queue Wait Time (minutes)")}
+{chart_section("avgQueue", "Average Queue Wait Time (minutes)",
+    "Mean time jobs spent waiting for a runner before starting.")}
 
-{chart_section("failureRate", "Failure Rate (%)")}
+{chart_section("failureRate", "Failure Rate (%)",
+    "Percentage of jobs that failed (excludes skipped and cancelled).")}
 
-{chart_section("byGroup", "Jobs by Runner Group", canvas_style="max-width:800px")}
+{chart_section("byGroup", "Jobs by Runner Group",
+    "Total jobs per runner group over the full date range.", canvas_style="max-width:800px")}
 
-{chart_section("parallelRate", "Average Concurrent Runners (Parallelization Rate)",
-    "Total busy time / 24h per runner group.")}
+{chart_section("parallelRate", "Average Concurrent Runners",
+    "Average number of self-hosted runners busy at any moment, per group. Computed as total busy time / 24h.")}
 
-{chart_section("queueWait", "Queue Wait Time Percentiles (minutes)")}
+{chart_section("queueWait", "Queue Wait Time Percentiles (minutes)",
+    "Average, median (p50), p90, and p95 queue wait times per day.")}
 
 
 <script src="{CHARTJS_CDN}"></script>
