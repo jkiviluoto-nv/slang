@@ -442,7 +442,7 @@ def generate_index(data, output_dir):
 <h2>Last 3 Days</h2>
 <div>
   <div class="stat-card"><div class="value">{ci_tat_3d:.0f}m{tat_delta}</div><div class="label">CI Turnaround (avg)</div></div>
-  <div class="stat-card"><div class="value">{prs_3d:.0f}{prs_delta}</div><div class="label">Active PRs / day</div></div>
+  <div class="stat-card"><div class="value">{prs_3d:.1f}{prs_delta}</div><div class="label">Active PRs / day</div></div>
   <div class="stat-card"><div class="value">{failure_rate_3d:.1f}%{fr_delta}</div><div class="label">Failure Rate</div></div>
 </div>
 
