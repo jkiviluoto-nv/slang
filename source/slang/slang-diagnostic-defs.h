@@ -2564,7 +2564,11 @@ DIAGNOSTIC(
     Error,
     cannotEmitReflectionWithoutTarget,
     "cannot emit reflection JSON; no compilation target available")
-
+DIAGNOSTIC(
+    52010,
+    Error,
+    refParamWithInterfaceTypeInDynamicDispatch,
+    "'$0' parameter of type '$1' cannot be used in a dynamic dispatch context.")
 DIAGNOSTIC(54001, Warning, meshOutputMustBeOut, "Mesh shader outputs must be declared with 'out'.")
 DIAGNOSTIC(54002, Error, meshOutputMustBeArray, "HLSL style mesh shader outputs must be arrays")
 DIAGNOSTIC(
