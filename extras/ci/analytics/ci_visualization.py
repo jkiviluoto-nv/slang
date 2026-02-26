@@ -40,15 +40,48 @@ def parse_args():
     return parser.parse_args()
 
 
+def validate_config(config):
+    """Validate expected config structure."""
+    if not isinstance(config, dict):
+        raise ValueError("Config root must be an object.")
+    label_groups = config.get("label_groups", [])
+    if not isinstance(label_groups, list):
+        raise ValueError("Config 'label_groups' must be a list.")
+    for i, group in enumerate(label_groups):
+        if not isinstance(group, dict):
+            raise ValueError(f"label_groups[{i}] must be an object.")
+        if "name" not in group or not isinstance(group["name"], str) or not group["name"]:
+            raise ValueError(f"label_groups[{i}].name must be a non-empty string.")
+        labels = group.get("labels")
+        if not isinstance(labels, list) or not all(isinstance(l, str) and l for l in labels):
+            raise ValueError(f"label_groups[{i}].labels must be a list of non-empty strings.")
+        if "runner_count" in group and (
+            not isinstance(group["runner_count"], int) or group["runner_count"] < 0
+        ):
+            raise ValueError(f"label_groups[{i}].runner_count must be a non-negative integer.")
+    non_prod = config.get("non_production_periods", {})
+    if not isinstance(non_prod, dict):
+        raise ValueError("Config 'non_production_periods' must be an object.")
+    if "runners" in non_prod and not isinstance(non_prod["runners"], dict):
+        raise ValueError("Config 'non_production_periods.runners' must be an object.")
+
+
 def load_config():
     """Load runner group config from runner_config.json."""
     config_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "runner_config.json"
     )
-    if os.path.exists(config_path):
-        with open(config_path) as f:
-            return json.load(f)
-    return {"label_groups": [], "non_production_periods": {"runners": {}}}
+    default = {"label_groups": [], "non_production_periods": {"runners": {}}}
+    if not os.path.exists(config_path):
+        return default
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            config = json.load(f)
+        validate_config(config)
+        return config
+    except (OSError, json.JSONDecodeError, ValueError) as e:
+        print(f"Error: invalid runner config at {config_path}: {e}", file=sys.stderr)
+        sys.exit(2)
 
 
 def classify_group(labels, config):
@@ -1117,8 +1150,24 @@ def main():
 
     # Load job data
     print(f"Loading job data from {args.input}...")
-    with open(args.input) as f:
-        jobs_data = json.load(f)
+    try:
+        with open(args.input, encoding="utf-8") as f:
+            jobs_data = json.load(f)
+    except FileNotFoundError:
+        print(f"Error: input JSON not found: {args.input}", file=sys.stderr)
+        sys.exit(2)
+    except json.JSONDecodeError as e:
+        print(f"Error: invalid JSON in {args.input}: {e}", file=sys.stderr)
+        sys.exit(2)
+    except OSError as e:
+        print(f"Error: failed reading {args.input}: {e}", file=sys.stderr)
+        sys.exit(2)
+    if not isinstance(jobs_data, list):
+        print(
+            f"Error: expected top-level array in {args.input}, got {type(jobs_data).__name__}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     print(f"Loaded {len(jobs_data)} jobs")
 
     # Process
