@@ -124,6 +124,19 @@ CONCLUSION_COLORS = {
     "skipped": "#6c757d",
 }
 
+CHART_PALETTE = [
+    "#0d6efd",
+    "#28a745",
+    "#ffc107",
+    "#dc3545",
+    "#6f42c1",
+    "#fd7e14",
+    "#20c997",
+    "#e83e8c",
+    "#17a2b8",
+    "#6610f2",
+]
+
 
 def chart_section(chart_id, title, description="", canvas_style=""):
     """Generate HTML for a chart section with anchor link and download button."""
@@ -394,6 +407,27 @@ def _avg_last_n_days(by_date, dates, n):
     for d in recent:
         all_vals.extend(by_date.get(d, []))
     return sum(all_vals) / len(all_vals) if all_vals else 0
+
+
+def build_os_phase_dataset_js(os_list, os_phase_avg_by_date, dates, phase):
+    datasets = []
+    for i, os_name in enumerate(os_list):
+        key = f"{os_name}_{phase}"
+        if key not in os_phase_avg_by_date:
+            continue
+        series = os_phase_avg_by_date.get(key, [0] * len(dates))
+        datasets.append(
+            (
+                "{"
+                f"label:'{os_name}', "
+                f"data:sliceData({json.dumps(series)},30), "
+                f"_allData:{json.dumps(series)}, "
+                f"borderColor:'{CHART_PALETTE[i % len(CHART_PALETTE)]}', "
+                "fill:false, tension:0.1"
+                "}"
+            )
+        )
+    return ",".join(datasets)
 
 
 def generate_index(data, output_dir):
@@ -681,14 +715,13 @@ def generate_statistics(data, config, output_dir):
         for g in sorted(sh_groups):
             group_parallel_per_day[g].append(round(group_busy[g] / 86400, 2))
 
-    colors = ["#0d6efd", "#28a745", "#ffc107", "#dc3545", "#6f42c1", "#fd7e14", "#20c997", "#e83e8c", "#17a2b8", "#6610f2"]
     parallel_datasets = []
     ci = 0
     for g in sorted(sh_groups):
         # Only include groups that have actual data
         if not any(v > 0 for v in group_parallel_per_day[g]):
             continue
-        color = colors[ci % len(colors)]
+        color = CHART_PALETTE[ci % len(CHART_PALETTE)]
         ci += 1
         parallel_datasets.append({
             "label": g,
@@ -709,6 +742,13 @@ def generate_statistics(data, config, output_dir):
         avg_build_wait.append(round(sum(bw) / len(bw), 1) if bw else 0)
         tw = test_wait_by_date.get(date, [])
         avg_test_wait.append(round(sum(tw) / len(tw), 1) if tw else 0)
+
+    build_os_datasets_js = build_os_phase_dataset_js(
+        os_list, os_phase_avg_by_date, dates, "build"
+    )
+    test_os_datasets_js = build_os_phase_dataset_js(
+        os_list, os_phase_avg_by_date, dates, "test"
+    )
 
     body = f"""
 <h1>Statistics &amp; Trends</h1>
@@ -841,11 +881,7 @@ makeChart('buildTestWait_canvas', 'line', {{
 makeChart('buildByOs_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
-    datasets: [{','.join(
-      f"""{{label:'{os_name}', data:sliceData({json.dumps(os_phase_avg_by_date.get(f'{os_name}_build', [0]*len(dates)))},30), _allData:{json.dumps(os_phase_avg_by_date.get(f'{os_name}_build', [0]*len(dates)))}, borderColor:'{["#0d6efd","#28a745","#ffc107","#dc3545","#6f42c1","#fd7e14","#20c997","#e83e8c","#17a2b8","#6610f2"][i % 10]}', fill:false, tension:0.1}}"""
-      for i, os_name in enumerate(os_list)
-      if f'{os_name}_build' in os_phase_avg_by_date
-    )}]
+    datasets: [{build_os_datasets_js}]
   }},
   options: {{responsive:true, scales:{{y:{{title:{{display:true,text:'Minutes'}}}}}}}}
 }});
@@ -854,11 +890,7 @@ makeChart('buildByOs_canvas', 'line', {{
 makeChart('testByOs_canvas', 'line', {{
   data: {{
     labels: sliceData(allLabels, 30),
-    datasets: [{','.join(
-      f"""{{label:'{os_name}', data:sliceData({json.dumps(os_phase_avg_by_date.get(f'{os_name}_test', [0]*len(dates)))},30), _allData:{json.dumps(os_phase_avg_by_date.get(f'{os_name}_test', [0]*len(dates)))}, borderColor:'{["#0d6efd","#28a745","#ffc107","#dc3545","#6f42c1","#fd7e14","#20c997","#e83e8c","#17a2b8","#6610f2"][i % 10]}', fill:false, tension:0.1}}"""
-      for i, os_name in enumerate(os_list)
-      if f'{os_name}_test' in os_phase_avg_by_date
-    )}]
+    datasets: [{test_os_datasets_js}]
   }},
   options: {{responsive:true, scales:{{y:{{title:{{display:true,text:'Minutes'}}}}}}}}
 }});
