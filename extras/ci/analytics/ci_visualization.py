@@ -614,15 +614,6 @@ def generate_statistics(data, config, output_dir):
             "tension": 0.1,
         })
 
-    table_rows = ""
-    for g in sorted(sh_groups):
-        vals = group_parallel_per_day[g]
-        avg = sum(vals) / len(vals) if vals else 0
-        peak = max(vals) if vals else 0
-        rc = sh_groups[g]
-        rc_str = str(rc) if rc > 0 else "dynamic"
-        table_rows += f"<tr><td>{g}</td><td>{rc_str}</td><td>{avg:.1f}</td><td>{peak:.1f}</td></tr>\n"
-
     # Build and test wait times per day
     build_wait_by_date = data.get("build_wait_by_date", {})
     test_wait_by_date = data.get("test_wait_by_date", {})
@@ -678,11 +669,6 @@ def generate_statistics(data, config, output_dir):
 
 {chart_section("queueWait", "Queue Wait Time Percentiles (minutes)")}
 
-<h2>Runner Group Summary</h2>
-<table>
-  <tr><th>Group</th><th>Fleet Size</th><th>Avg Concurrent</th><th>Peak Concurrent</th></tr>
-  {table_rows}
-</table>
 
 <script src="{CHARTJS_CDN}"></script>
 <script>
