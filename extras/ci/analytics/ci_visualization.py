@@ -383,20 +383,20 @@ def generate_index(data, output_dir):
                 pr_branches.add(j["head_branch"])
     prs_3d = len(pr_branches) / len(recent_dates) if recent_dates else 0
 
-    # Queue wait: average across last 3 days
-    queue_vals = []
+    # Failure rate last 3 days (failures only, not cancelled)
+    recent_success = 0
+    recent_failure = 0
     for d in recent_dates:
         for j in data["jobs_by_date"].get(d, []):
             if not ci_filter(j):
                 continue
-            q = j.get("queued_seconds")
-            if q and q >= 0:
-                queue_vals.append(q / 60)
-    queue_3d = sum(queue_vals) / len(queue_vals) if queue_vals else 0
-
-    # Build and test wait
-    bw_3d = _avg_last_n_days(data.get("build_wait_by_date", {}), dates, 3)
-    tw_3d = _avg_last_n_days(data.get("test_wait_by_date", {}), dates, 3)
+            c = j.get("conclusion")
+            if c == "success":
+                recent_success += 1
+            elif c == "failure":
+                recent_failure += 1
+    recent_total = recent_success + recent_failure
+    failure_rate_3d = (recent_failure / recent_total * 100) if recent_total > 0 else 0
 
     months_html = ""
     for month in reversed(data["months"]):
@@ -410,9 +410,7 @@ def generate_index(data, output_dir):
 <div>
   <div class="stat-card"><div class="value">{ci_tat_3d:.0f}m</div><div class="label">CI Turnaround (avg)</div></div>
   <div class="stat-card"><div class="value">{prs_3d:.0f}</div><div class="label">Active PRs / day</div></div>
-  <div class="stat-card"><div class="value">{queue_3d:.1f}m</div><div class="label">Avg Queue Wait</div></div>
-  <div class="stat-card"><div class="value">{bw_3d:.1f}m</div><div class="label">Build Wait</div></div>
-  <div class="stat-card"><div class="value">{tw_3d:.1f}m</div><div class="label">Test Wait (after build)</div></div>
+  <div class="stat-card"><div class="value">{failure_rate_3d:.1f}%</div><div class="label">Failure Rate</div></div>
 </div>
 
 <h2>Pages</h2>
