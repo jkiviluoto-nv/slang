@@ -170,11 +170,23 @@ def load_snapshots(output_dir, hours=24):
     return snapshots
 
 
+def _deduplicate_snapshots(snapshots):
+    """Keep only the latest snapshot per rounded time window."""
+    by_window = {}
+    for s in snapshots:
+        key = _round_time(s["timestamp"][11:16])
+        # Include date to handle day boundaries
+        date = s["timestamp"][:10]
+        by_window[(date, key)] = s
+    return [by_window[k] for k in sorted(by_window)]
+
+
 def build_history_chart(snapshots):
     """Build Chart.js HTML for 24h runner load history."""
     if not snapshots:
         return "<p>No history data yet. Snapshots accumulate every 15 minutes.</p>"
 
+    snapshots = _deduplicate_snapshots(snapshots)
     timestamps = [_round_time(s["timestamp"][11:16]) for s in snapshots]
 
     # Only show GCP VM groups (Linux GPU and Windows GPU), exclude scaler host and test runners
