@@ -26,6 +26,14 @@ from ci_visualization import page_template
 
 
 DEFAULT_REPO = "shader-slang/slang"
+DISPLAY_INTERVAL_MIN = 15
+
+
+def _round_time(hhmm, interval=DISPLAY_INTERVAL_MIN):
+    """Round HH:MM string down to the nearest interval."""
+    h, m = int(hhmm[:2]), int(hhmm[3:5])
+    m = (m // interval) * interval
+    return f"{h:02d}:{m:02d}"
 SNAPSHOTS_FILE = "health_snapshots.jsonl"
 CHARTJS_CDN = "https://cdn.jsdelivr.net/npm/chart.js"
 
@@ -167,7 +175,7 @@ def build_history_chart(snapshots):
     if not snapshots:
         return "<p>No history data yet. Snapshots accumulate every 15 minutes.</p>"
 
-    timestamps = [s["timestamp"][11:16] for s in snapshots]  # HH:MM
+    timestamps = [_round_time(s["timestamp"][11:16]) for s in snapshots]
 
     # Only show GCP VM groups (Linux GPU and Windows GPU), exclude scaler host and test runners
     gcp_vm_groups = ["Linux GPU (GCP)", "Windows GPU (GCP)"]
@@ -255,7 +263,8 @@ new Chart(document.getElementById('queueHistory').getContext('2d'), {{
 def generate_health_html(queue_data, failures, output_dir):
     """Generate health.html from live data."""
     now = datetime.now(timezone.utc)
-    fetched_at = now.strftime("%Y-%m-%d %H:%M:%S UTC")
+    rounded_time = _round_time(now.strftime("%H:%M"))
+    fetched_at = now.strftime(f"%Y-%m-%d {rounded_time} UTC")
 
     # Runner status section — only online GCP GPU runners
     GCP_GPU_GROUPS = {"Linux GPU (GCP)", "Windows GPU (GCP)"}
