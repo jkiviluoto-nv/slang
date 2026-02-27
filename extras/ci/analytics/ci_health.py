@@ -273,6 +273,33 @@ def generate_health_html(queue_data, failures, output_dir):
                 runners_html += "</table>\n"
         else:
             runners_html = "<p>No GCP GPU runners online.</p>"
+
+        # Other runners (non-GCP GPU, online only)
+        other_runners = [
+            r for r in runners
+            if r.get("group", "Other") not in GCP_GPU_GROUPS
+            and r.get("status") == "online"
+        ]
+        if other_runners:
+            runners_html += '\n<h3>Other Runners</h3>\n'
+            runners_html += '<table><tr><th>Runner</th><th>Group</th><th>Status</th><th>Current Job</th></tr>\n'
+            for r in sorted(other_runners, key=lambda x: x.get("name", "")):
+                name = r.get("name", "")
+                group = r.get("group", "")
+                busy_flag = r.get("busy", False)
+                state = '<span style="color:#0d6efd">BUSY</span>' if busy_flag else '<span style="color:#28a745">IDLE</span>'
+
+                job_info = ""
+                job = r.get("job")
+                if job:
+                    job_name = job.get("name", "")
+                    job_branch = job.get("branch", "")
+                    job_url = job.get("html_url", "")
+                    label = f"{job_name} ({job_branch})" if job_branch else job_name
+                    job_info = f'<a href="{job_url}" target="_blank">{label}</a>' if job_url else label
+
+                runners_html += f"<tr><td>{name}</td><td>{group}</td><td>{state}</td><td>{job_info}</td></tr>\n"
+            runners_html += "</table>\n"
     elif queue_data:
         runners_html = "<p>Runner data not available (may require admin access).</p>"
     else:
