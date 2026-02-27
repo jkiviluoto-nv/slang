@@ -59,6 +59,19 @@ def validate_config(config):
             not isinstance(group["runner_count"], int) or group["runner_count"] < 0
         ):
             raise ValueError(f"label_groups[{i}].runner_count must be a non-negative integer.")
+    # Validate runner_name_prefixes
+    prefixes = config.get("runner_name_prefixes", [])
+    if not isinstance(prefixes, list):
+        raise ValueError("Config 'runner_name_prefixes' must be a list.")
+    for i, p in enumerate(prefixes):
+        if not isinstance(p, dict):
+            raise ValueError(f"runner_name_prefixes[{i}] must be an object.")
+        prefix = p.get("prefix")
+        if not isinstance(prefix, str) or not prefix:
+            raise ValueError(f"runner_name_prefixes[{i}].prefix must be a non-empty string.")
+        if "name" not in p or not isinstance(p["name"], str) or not p["name"]:
+            raise ValueError(f"runner_name_prefixes[{i}].name must be a non-empty string.")
+
     non_prod = config.get("non_production_periods", {})
     if not isinstance(non_prod, dict):
         raise ValueError("Config 'non_production_periods' must be an object.")
