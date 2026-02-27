@@ -106,12 +106,13 @@ def fetch_recent_failures(repo):
             continue
         if run.get("conclusion") != "failure":
             continue
-        if run.get("created_at", "") < cutoff:
+        event_time = run.get("updated_at") or run.get("created_at", "")
+        if event_time < cutoff:
             continue
         failures.append({
             "branch": run.get("head_branch", ""),
             "url": run.get("html_url", ""),
-            "created_at": run.get("created_at", ""),
+            "created_at": event_time,
             "actor": (run.get("actor") or {}).get("login", ""),
         })
     return failures[:10]
