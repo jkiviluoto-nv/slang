@@ -68,7 +68,10 @@ def load_runner_config():
             groups.append((labels, name, self_hosted))
         prefixes = []
         for p in config.get("runner_name_prefixes", []):
-            prefixes.append((p.get("prefix", ""), p.get("name", "Other"), bool(p.get("self_hosted", False))))
+            prefix = p.get("prefix", "")
+            if not prefix:
+                continue
+            prefixes.append((prefix, p.get("name", "Other"), bool(p.get("self_hosted", False))))
         return groups or DEFAULT_LABEL_GROUPS, prefixes
     except (OSError, json.JSONDecodeError):
         return DEFAULT_LABEL_GROUPS, []
