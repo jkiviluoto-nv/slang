@@ -22,22 +22,22 @@
     },
     {
       "labels": ["Windows", "self-hosted", "regression-test"],
-      "name": "Windows test (GCP)",
+      "name": "Windows",
       "self_hosted": true
     },
     {
       "labels": ["Windows", "self-hosted", "benchmark"],
-      "name": "Windows test (GCP)",
+      "name": "Windows",
       "self_hosted": true
     },
     {
       "labels": ["Windows", "self-hosted", "falcor"],
-      "name": "Windows test (GCP)",
+      "name": "Windows",
       "self_hosted": true
     },
     {
       "labels": ["Windows", "self-hosted", "perf"],
-      "name": "Windows test (GCP)",
+      "name": "Windows",
       "self_hosted": true
     },
     {
