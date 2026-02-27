@@ -58,8 +58,8 @@ jobs:
         if: inputs.os == 'windows'
         shell: pwsh
         run: |
-          Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files\Git\bin"
-          Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files\Git\usr\bin"
+          Add-Content -Path $env:GITHUB_PATH -Value "C:\\Program Files\\Git\\bin"
+          Add-Content -Path $env:GITHUB_PATH -Value "C:\\Program Files\\Git\\usr\\bin"
 
       - uses: actions/checkout@v4
         with:
