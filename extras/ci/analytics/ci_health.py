@@ -245,7 +245,7 @@ new Chart(document.getElementById('queueHistory').getContext('2d'), {{
   options: {{
     responsive: true,
     scales: {{y: {{min: 0, title: {{display: true, text: 'Jobs'}}}}}},
-    plugins: {{title: {{display: true, text: 'Queue Depth (24h)'}}}}
+    plugins: {{title: {{display: true, text: 'Job Queue Depth (24h)'}}}}
   }}
 }});
 </script>
