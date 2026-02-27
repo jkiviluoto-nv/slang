@@ -235,45 +235,44 @@ def generate_health_html(queue_data, failures, output_dir):
     now = datetime.now(timezone.utc)
     fetched_at = now.strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    # Runner status section
+    # Runner status section — only online GCP GPU runners
+    GCP_GPU_GROUPS = {"Linux GPU (GCP)", "Windows GPU (GCP)"}
     runners_html = ""
     if queue_data and queue_data.get("self_hosted_runners"):
         runners = queue_data["self_hosted_runners"]
-        # Group by group name
         from collections import defaultdict
         groups = defaultdict(list)
         for r in runners:
-            groups[r.get("group", "Other")].append(r)
+            g = r.get("group", "Other")
+            if g in GCP_GPU_GROUPS and r.get("status") == "online":
+                groups[g].append(r)
 
-        for group_name, group_runners in sorted(groups.items()):
-            online = sum(1 for r in group_runners if r.get("status") == "online")
-            busy = sum(1 for r in group_runners if r.get("busy"))
-            total = len(group_runners)
+        if groups:
+            for group_name in sorted(groups):
+                group_runners = groups[group_name]
+                busy = sum(1 for r in group_runners if r.get("busy"))
+                total = len(group_runners)
 
-            runners_html += f'<h3>{group_name} ({online}/{total} online, {busy} busy)</h3>\n'
-            runners_html += '<table><tr><th>Runner</th><th>Status</th><th>Current Job</th></tr>\n'
-            for r in sorted(group_runners, key=lambda x: x.get("name", "")):
-                name = r.get("name", "")
-                status = r.get("status", "unknown")
-                busy_flag = r.get("busy", False)
-                if status != "online":
-                    state = '<span style="color:#dc3545">OFFLINE</span>'
-                elif busy_flag:
-                    state = '<span style="color:#0d6efd">BUSY</span>'
-                else:
-                    state = '<span style="color:#28a745">IDLE</span>'
+                runners_html += f'<h3>{group_name} ({busy}/{total} busy)</h3>\n'
+                runners_html += '<table><tr><th>Runner</th><th>Status</th><th>Current Job</th></tr>\n'
+                for r in sorted(group_runners, key=lambda x: x.get("name", "")):
+                    name = r.get("name", "")
+                    busy_flag = r.get("busy", False)
+                    state = '<span style="color:#0d6efd">BUSY</span>' if busy_flag else '<span style="color:#28a745">IDLE</span>'
 
-                job_info = ""
-                job = r.get("job")
-                if job:
-                    job_name = job.get("name", "")
-                    job_branch = job.get("branch", "")
-                    job_info = f"{job_name}"
-                    if job_branch:
-                        job_info += f" ({job_branch})"
+                    job_info = ""
+                    job = r.get("job")
+                    if job:
+                        job_name = job.get("name", "")
+                        job_branch = job.get("branch", "")
+                        job_url = job.get("html_url", "")
+                        label = f"{job_name} ({job_branch})" if job_branch else job_name
+                        job_info = f'<a href="{job_url}" target="_blank">{label}</a>' if job_url else label
 
-                runners_html += f"<tr><td>{name}</td><td>{state}</td><td>{job_info}</td></tr>\n"
-            runners_html += "</table>\n"
+                    runners_html += f"<tr><td>{name}</td><td>{state}</td><td>{job_info}</td></tr>\n"
+                runners_html += "</table>\n"
+        else:
+            runners_html = "<p>No GCP GPU runners online.</p>"
     elif queue_data:
         runners_html = "<p>Runner data not available (may require admin access).</p>"
     else:

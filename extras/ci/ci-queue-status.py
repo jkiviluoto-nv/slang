@@ -577,6 +577,7 @@ def build_json_output(queued_runs, inprogress_runs, all_jobs, runners, runners_a
                     "name": job.get("name"),
                     "branch": job.get("_branch", ""),
                     "workflow": job.get("_workflow", ""),
+                    "html_url": job.get("html_url", ""),
                 }
             runner_status.append(entry)
 
