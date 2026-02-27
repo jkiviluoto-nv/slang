@@ -214,7 +214,20 @@ def build_history_chart(snapshots):
     runs_in_progress = [s.get("runs_in_progress", 0) for s in snapshots]
     runs_queued = [s.get("runs_queued", 0) for s in snapshots]
 
+    # Build per-group data series
+    group_series = {}
+    for g in gcp_vm_groups:
+        group_series[g] = [s.get("runner_groups", {}).get(g, {}).get("total", 0) for s in snapshots]
+
     return f"""
+<div style="margin-bottom:15px">
+  <label>Time window: </label>
+  <select id="historyRange" onchange="updateHistoryRange()">
+    <option value="4">Last 4 hours</option>
+    <option value="12">Last 12 hours</option>
+    <option value="24" selected>Last 24 hours</option>
+  </select>
+</div>
 <div style="position:relative;width:100%;max-width:1200px;margin:20px 0">
   <canvas id="runnerHistory"></canvas>
 </div>
@@ -226,48 +239,99 @@ def build_history_chart(snapshots):
 </div>
 <script src="{CHARTJS_CDN}"></script>
 <script>
-new Chart(document.getElementById('runnerHistory').getContext('2d'), {{
-  type: 'line',
-  data: {{
-    labels: {json.dumps(timestamps)},
-    datasets: {json.dumps(datasets)}
-  }},
-  options: {{
-    responsive: true,
-    scales: {{y: {{min: 0, stacked: true, title: {{display: true, text: 'GCP VMs Online'}}}}}},
-    plugins: {{title: {{display: true, text: 'GCP Runner VMs (24h)'}}}}
+// All snapshot data
+const allTimestamps = {json.dumps(timestamps)};
+const allRunnerData = {json.dumps({g: group_series[g] for g in gcp_vm_groups})};
+const allRunsInProgress = {json.dumps(runs_in_progress)};
+const allRunsQueued = {json.dumps(runs_queued)};
+const allJobsQueued = {json.dumps(queued_data)};
+const allJobsRunning = {json.dumps(running_data)};
+
+const runnerColors = {json.dumps(palette)};
+const pointsPerHour = 4; // 15-min intervals
+
+let charts = {{}};
+
+function sliceLast(arr, n) {{ return arr.slice(-n); }}
+
+function thinLabels(labels, step) {{
+  return labels.map((l, i) => i % step === 0 ? l : '');
+}}
+
+function buildCharts(hours) {{
+  const n = hours * pointsPerHour;
+  const tickStep = hours >= 24 ? 2 : 1; // every 30min for 24h, 15min for shorter
+  const labels = sliceLast(allTimestamps, n);
+  const displayLabels = thinLabels(labels, tickStep);
+
+  // Destroy existing charts
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {{}};
+
+  // Runner VMs
+  const runnerDatasets = [];
+  for (const [g, color] of Object.entries(runnerColors)) {{
+    runnerDatasets.push({{
+      label: g,
+      data: sliceLast(allRunnerData[g], n),
+      borderColor: color,
+      backgroundColor: color + '55',
+      fill: true,
+      tension: 0.3,
+    }});
   }}
-}});
-new Chart(document.getElementById('workflowHistory').getContext('2d'), {{
-  type: 'line',
-  data: {{
-    labels: {json.dumps(timestamps)},
-    datasets: [
-      {{label: 'Runs In Progress', data: {json.dumps(runs_in_progress)}, borderColor: '#0d6efd', fill: true, backgroundColor: 'rgba(13,110,253,0.1)', tension: 0.3}},
-      {{label: 'Runs Queued', data: {json.dumps(runs_queued)}, borderColor: '#ffc107', fill: true, backgroundColor: 'rgba(255,193,7,0.1)', tension: 0.3}}
-    ]
-  }},
-  options: {{
-    responsive: true,
-    scales: {{y: {{min: 0, title: {{display: true, text: 'Workflow Runs'}}}}}},
-    plugins: {{title: {{display: true, text: 'Active CI Workflows (24h)'}}}}
-  }}
-}});
-new Chart(document.getElementById('queueHistory').getContext('2d'), {{
-  type: 'line',
-  data: {{
-    labels: {json.dumps(timestamps)},
-    datasets: [
-      {{label: 'Jobs Queued', data: {json.dumps(queued_data)}, borderColor: '#dc3545', fill: true, backgroundColor: 'rgba(220,53,69,0.1)', tension: 0.3}},
-      {{label: 'Jobs Running', data: {json.dumps(running_data)}, borderColor: '#0d6efd', fill: false, tension: 0.3}}
-    ]
-  }},
-  options: {{
-    responsive: true,
-    scales: {{y: {{min: 0, title: {{display: true, text: 'Jobs'}}}}}},
-    plugins: {{title: {{display: true, text: 'Job Queue Depth (24h)'}}}}
-  }}
-}});
+  charts.runner = new Chart(document.getElementById('runnerHistory').getContext('2d'), {{
+    type: 'line',
+    data: {{ labels: displayLabels, datasets: runnerDatasets }},
+    options: {{
+      responsive: true,
+      scales: {{ y: {{ min: 0, stacked: true, title: {{ display: true, text: 'GCP VMs Online' }} }} }},
+      plugins: {{ title: {{ display: true, text: 'GCP Runner VMs' }} }}
+    }}
+  }});
+
+  // Workflow runs
+  charts.workflow = new Chart(document.getElementById('workflowHistory').getContext('2d'), {{
+    type: 'line',
+    data: {{
+      labels: displayLabels,
+      datasets: [
+        {{ label: 'Runs In Progress', data: sliceLast(allRunsInProgress, n), borderColor: '#0d6efd', fill: true, backgroundColor: 'rgba(13,110,253,0.1)', tension: 0.3 }},
+        {{ label: 'Runs Queued', data: sliceLast(allRunsQueued, n), borderColor: '#ffc107', fill: true, backgroundColor: 'rgba(255,193,7,0.1)', tension: 0.3 }}
+      ]
+    }},
+    options: {{
+      responsive: true,
+      scales: {{ y: {{ min: 0, title: {{ display: true, text: 'Workflow Runs' }} }} }},
+      plugins: {{ title: {{ display: true, text: 'Active CI Workflows' }} }}
+    }}
+  }});
+
+  // Job queue
+  charts.queue = new Chart(document.getElementById('queueHistory').getContext('2d'), {{
+    type: 'line',
+    data: {{
+      labels: displayLabels,
+      datasets: [
+        {{ label: 'Jobs Queued', data: sliceLast(allJobsQueued, n), borderColor: '#dc3545', fill: true, backgroundColor: 'rgba(220,53,69,0.1)', tension: 0.3 }},
+        {{ label: 'Jobs Running', data: sliceLast(allJobsRunning, n), borderColor: '#0d6efd', fill: false, tension: 0.3 }}
+      ]
+    }},
+    options: {{
+      responsive: true,
+      scales: {{ y: {{ min: 0, title: {{ display: true, text: 'Jobs' }} }} }},
+      plugins: {{ title: {{ display: true, text: 'Job Queue Depth' }} }}
+    }}
+  }});
+}}
+
+function updateHistoryRange() {{
+  const hours = parseInt(document.getElementById('historyRange').value);
+  buildCharts(hours);
+}}
+
+// Initial render
+buildCharts(24);
 </script>
 """
 
