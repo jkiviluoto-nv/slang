@@ -14,11 +14,12 @@ Usage:
 """
 
 import argparse
+import html as html_mod
 import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # Import the page template from ci_visualization
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -26,6 +27,18 @@ from ci_visualization import page_template
 
 
 DEFAULT_REPO = "shader-slang/slang"
+
+
+def _esc(s):
+    """HTML-escape a string."""
+    return html_mod.escape(str(s), quote=True)
+
+
+def _link(url, text):
+    """Build an escaped HTML link, or just escaped text if no URL."""
+    if url:
+        return f'<a href="{_esc(url)}" target="_blank" rel="noopener noreferrer">{_esc(text)}</a>'
+    return _esc(text)
 DISPLAY_INTERVAL_MIN = 15
 
 
@@ -86,11 +99,14 @@ def fetch_recent_failures(repo):
     if err:
         return []
 
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
     failures = []
     for run in (runs or []):
         if run.get("name") != "CI":
             continue
         if run.get("conclusion") != "failure":
+            continue
+        if run.get("created_at", "") < cutoff:
             continue
         failures.append({
             "branch": run.get("head_branch", ""),
@@ -364,10 +380,10 @@ def generate_health_html(queue_data, failures, output_dir):
                 busy = sum(1 for r in group_runners if r.get("busy"))
                 total = len(group_runners)
 
-                runners_html += f'<h3>{group_name} ({busy}/{total} busy)</h3>\n'
+                runners_html += f'<h3>{_esc(group_name)} ({busy}/{total} busy)</h3>\n'
                 runners_html += '<table><tr><th>Runner</th><th>Status</th><th>Current Job</th></tr>\n'
                 for r in sorted(group_runners, key=lambda x: x.get("name", "")):
-                    name = r.get("name", "")
+                    name = _esc(r.get("name", ""))
                     busy_flag = r.get("busy", False)
                     state = '<span style="color:#0d6efd">BUSY</span>' if busy_flag else '<span style="color:#28a745">IDLE</span>'
 
@@ -378,7 +394,7 @@ def generate_health_html(queue_data, failures, output_dir):
                         job_branch = job.get("branch", "")
                         job_url = job.get("html_url", "")
                         label = f"{job_name} ({job_branch})" if job_branch else job_name
-                        job_info = f'<a href="{job_url}" target="_blank">{label}</a>' if job_url else label
+                        job_info = _link(job_url, label)
 
                     runners_html += f"<tr><td>{name}</td><td>{state}</td><td>{job_info}</td></tr>\n"
                 runners_html += "</table>\n"
@@ -395,8 +411,8 @@ def generate_health_html(queue_data, failures, output_dir):
             runners_html += '\n<h3>Other Runners</h3>\n'
             runners_html += '<table><tr><th>Runner</th><th>Group</th><th>Status</th><th>Current Job</th></tr>\n'
             for r in sorted(other_runners, key=lambda x: x.get("name", "")):
-                name = r.get("name", "")
-                group = r.get("group", "")
+                name = _esc(r.get("name", ""))
+                group = _esc(r.get("group", ""))
                 busy_flag = r.get("busy", False)
                 state = '<span style="color:#0d6efd">BUSY</span>' if busy_flag else '<span style="color:#28a745">IDLE</span>'
 
@@ -407,7 +423,7 @@ def generate_health_html(queue_data, failures, output_dir):
                     job_branch = job.get("branch", "")
                     job_url = job.get("html_url", "")
                     label = f"{job_name} ({job_branch})" if job_branch else job_name
-                    job_info = f'<a href="{job_url}" target="_blank">{label}</a>' if job_url else label
+                    job_info = _link(job_url, label)
 
                 runners_html += f"<tr><td>{name}</td><td>{group}</td><td>{state}</td><td>{job_info}</td></tr>\n"
             runners_html += "</table>\n"
@@ -470,8 +486,8 @@ def generate_health_html(queue_data, failures, output_dir):
                 name = j.get("name", "")
                 branch = j.get("branch", "")
                 url = j.get("html_url", "")
-                name_html = f'<a href="{url}" target="_blank">{name}</a>' if url else name
-                queue_html += f"<tr><td>{wait_str}</td><td>{name_html}</td><td>{branch}</td></tr>\n"
+                name_html = _link(url, name)
+                queue_html += f"<tr><td>{wait_str}</td><td>{name_html}</td><td>{_esc(branch)}</td></tr>\n"
             queue_html += "</table>\n"
     else:
         queue_html = "<p>Could not fetch queue status.</p>"
@@ -485,8 +501,8 @@ def generate_health_html(queue_data, failures, output_dir):
             actor = f.get("actor", "")
             url = f.get("url", "")
             created = f.get("created_at", "")[:16].replace("T", " ")
-            link = f'<a href="{url}" target="_blank">{branch}</a>' if url else branch
-            failures_html += f"<tr><td>{link}</td><td>{actor}</td><td>{created}</td></tr>\n"
+            link = _link(url, branch)
+            failures_html += f"<tr><td>{link}</td><td>{_esc(actor)}</td><td>{created}</td></tr>\n"
         failures_html += "</table>\n"
     else:
         failures_html = "<p>No recent CI failures.</p>"
