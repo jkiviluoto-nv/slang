@@ -145,7 +145,7 @@ def record_snapshot(queue_data, output_dir):
 
 
 def load_snapshots(output_dir, hours=24):
-    """Load snapshots from the last N hours."""
+    """Load snapshots from the last N hours (tail-read for large files)."""
     path = os.path.join(output_dir, SNAPSHOTS_FILE)
     if not os.path.exists(path):
         return []
@@ -155,19 +155,36 @@ def load_snapshots(output_dir, hours=24):
     cutoff = now - timedelta(hours=hours)
     cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    snapshots = []
+    def _iter_jsonl_tail(fp, block_size=64 * 1024):
+        """Yield JSONL lines from end to start without loading full file."""
+        fp.seek(0, os.SEEK_END)
+        buf = ""
+        pos = fp.tell()
+        while pos > 0:
+            read_size = block_size if pos >= block_size else pos
+            pos -= read_size
+            fp.seek(pos)
+            buf = fp.read(read_size) + buf
+            lines = buf.split("\n")
+            buf = lines[0]
+            for line in reversed(lines[1:]):
+                if line:
+                    yield line
+        if buf:
+            yield buf
+
+    snapshots_rev = []
     with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
+        for line in _iter_jsonl_tail(f):
             try:
                 snap = json.loads(line)
-                if snap.get("timestamp", "") >= cutoff_str:
-                    snapshots.append(snap)
             except json.JSONDecodeError:
                 continue
-    return snapshots
+            ts = snap.get("timestamp", "")
+            if ts < cutoff_str:
+                break
+            snapshots_rev.append(snap)
+    return list(reversed(snapshots_rev))
 
 
 def _deduplicate_snapshots(snapshots):
