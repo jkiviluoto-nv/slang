@@ -34,7 +34,7 @@ jobs:
           cd ci_analytics_repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add health.html
+          git add health.html health_snapshots.jsonl
           git diff --cached --quiet || {
             git commit -m "Update CI health $(date -u +%Y-%m-%dT%H:%M)" &&
             git push

@@ -26,6 +26,8 @@ from ci_visualization import page_template
 
 
 DEFAULT_REPO = "shader-slang/slang"
+SNAPSHOTS_FILE = "health_snapshots.jsonl"
+CHARTJS_CDN = "https://cdn.jsdelivr.net/npm/chart.js"
 
 
 def parse_args():
@@ -89,6 +91,143 @@ def fetch_recent_failures(repo):
             "actor": (run.get("actor") or {}).get("login", ""),
         })
     return failures[:10]
+
+
+def record_snapshot(queue_data, output_dir):
+    """Append a runner status snapshot to the JSONL time-series file."""
+    if not queue_data:
+        return
+
+    now = datetime.now(timezone.utc)
+    snapshot = {"timestamp": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+    # Aggregate runner counts by group
+    summary = queue_data.get("summary", {})
+    snapshot["jobs_queued"] = summary.get("jobs_queued", 0)
+    snapshot["jobs_running"] = summary.get("jobs_running", 0)
+    snapshot["runs_queued"] = summary.get("runs_queued", 0)
+    snapshot["runs_in_progress"] = summary.get("runs_in_progress", 0)
+
+    # Per-group busy/total from runner data
+    groups = {}
+    for r in queue_data.get("self_hosted_runners", []):
+        g = r.get("group", "Other")
+        if g not in groups:
+            groups[g] = {"busy": 0, "total": 0}
+        if r.get("status") == "online":
+            groups[g]["total"] += 1
+            if r.get("busy"):
+                groups[g]["busy"] += 1
+    snapshot["runner_groups"] = groups
+
+    # Per-group queue depth
+    queue_groups = {}
+    for g in queue_data.get("queue_by_group", []):
+        queue_groups[g["name"]] = {
+            "queued": g.get("queued", 0),
+            "running": g.get("running", 0),
+        }
+    snapshot["queue_by_group"] = queue_groups
+
+    # Append to JSONL file (kept indefinitely, ~55KB/day)
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(output_dir, SNAPSHOTS_FILE)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(snapshot) + "\n")
+
+
+def load_snapshots(output_dir, hours=24):
+    """Load snapshots from the last N hours."""
+    path = os.path.join(output_dir, SNAPSHOTS_FILE)
+    if not os.path.exists(path):
+        return []
+
+    now = datetime.now(timezone.utc)
+    from datetime import timedelta
+    cutoff = now - timedelta(hours=hours)
+    cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    snapshots = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                snap = json.loads(line)
+                if snap.get("timestamp", "") >= cutoff_str:
+                    snapshots.append(snap)
+            except json.JSONDecodeError:
+                continue
+    return snapshots
+
+
+def build_history_chart(snapshots):
+    """Build Chart.js HTML for 24h runner load history."""
+    if not snapshots:
+        return "<p>No history data yet. Snapshots accumulate every 15 minutes.</p>"
+
+    timestamps = [s["timestamp"][11:16] for s in snapshots]  # HH:MM
+
+    # Only show GCP VM groups (Linux GPU and Windows GPU), exclude scaler host and test runners
+    gcp_vm_groups = ["Linux GPU (GCP)", "Windows GPU (GCP)"]
+    palette = {"Linux GPU (GCP)": "#0d6efd", "Windows GPU (GCP)": "#28a745"}
+
+    datasets = []
+    for g in gcp_vm_groups:
+        color = palette[g]
+        online_data = [s.get("runner_groups", {}).get(g, {}).get("total", 0) for s in snapshots]
+        datasets.append({
+            "label": g,
+            "data": online_data,
+            "borderColor": color,
+            "backgroundColor": color + "55",
+            "fill": True,
+            "tension": 0.3,
+        })
+
+    # Queue depth over time
+    queued_data = [s.get("jobs_queued", 0) for s in snapshots]
+    running_data = [s.get("jobs_running", 0) for s in snapshots]
+
+    return f"""
+<div style="position:relative;width:100%;max-width:1200px;margin:20px 0">
+  <canvas id="runnerHistory"></canvas>
+</div>
+<div style="position:relative;width:100%;max-width:1200px;margin:20px 0">
+  <canvas id="queueHistory"></canvas>
+</div>
+<script src="{CHARTJS_CDN}"></script>
+<script>
+new Chart(document.getElementById('runnerHistory').getContext('2d'), {{
+  type: 'line',
+  data: {{
+    labels: {json.dumps(timestamps)},
+    datasets: {json.dumps(datasets)}
+  }},
+  options: {{
+    responsive: true,
+    scales: {{y: {{min: 0, stacked: true, title: {{display: true, text: 'GCP VMs Online'}}}}}},
+    plugins: {{title: {{display: true, text: 'GCP Runner VMs (24h)'}}}}
+  }}
+}});
+new Chart(document.getElementById('queueHistory').getContext('2d'), {{
+  type: 'line',
+  data: {{
+    labels: {json.dumps(timestamps)},
+    datasets: [
+      {{label: 'Jobs Queued', data: {json.dumps(queued_data)}, borderColor: '#dc3545', fill: true, backgroundColor: 'rgba(220,53,69,0.1)', tension: 0.3}},
+      {{label: 'Jobs Running', data: {json.dumps(running_data)}, borderColor: '#0d6efd', fill: false, tension: 0.3}}
+    ]
+  }},
+  options: {{
+    responsive: true,
+    scales: {{y: {{min: 0, title: {{display: true, text: 'Jobs'}}}}}},
+    plugins: {{title: {{display: true, text: 'Queue Depth (24h)'}}}}
+  }}
+}});
+</script>
+"""
 
 
 def generate_health_html(queue_data, failures, output_dir):
@@ -215,12 +354,19 @@ def generate_health_html(queue_data, failures, output_dir):
     else:
         failures_html = "<p>No recent CI failures.</p>"
 
+    # Load snapshots and build history chart
+    snapshots = load_snapshots(output_dir, hours=24)
+    history_html = build_history_chart(snapshots)
+
     body = f"""
 <h1>CI System Health</h1>
 <p style="color:#6c757d">Last updated: {fetched_at}</p>
 
 <h2>Queue Status</h2>
 {queue_html}
+
+<h2>24h Load History</h2>
+{history_html}
 
 <h2>Self-Hosted Runner Status</h2>
 {runners_html}
@@ -238,6 +384,9 @@ def main():
 
     print(f"Fetching queue status for {args.repo}...")
     queue_data = fetch_queue_status(args.repo)
+
+    print("Recording snapshot...")
+    record_snapshot(queue_data, args.output)
 
     print("Fetching recent CI failures...")
     failures = fetch_recent_failures(args.repo)

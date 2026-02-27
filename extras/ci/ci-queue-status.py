@@ -176,16 +176,19 @@ def fetch_runners(repo):
 
 
 def classify_group(labels, runner_name=""):
-    """Map job labels (or runner name) to a (group_name, is_self_hosted) tuple."""
-    label_set = set(labels) if labels else set()
-    for required, name, self_hosted in LABEL_GROUPS:
-        if required <= label_set:
-            return name, self_hosted
-    # Fall back to runner name prefix matching (for scale set runners with empty labels)
+    """Map runner name or job labels to a (group_name, is_self_hosted) tuple.
+
+    Checks runner name prefixes first (scale set runners have empty labels),
+    then falls back to label matching for legacy/static runners.
+    """
     if runner_name:
         for prefix, name, self_hosted in NAME_PREFIXES:
             if runner_name.startswith(prefix):
                 return name, self_hosted
+    label_set = set(labels) if labels else set()
+    for required, name, self_hosted in LABEL_GROUPS:
+        if required <= label_set:
+            return name, self_hosted
     return "Other", False
 
 

@@ -85,17 +85,22 @@ def load_config():
 
 
 def classify_group(labels, config, runner_name=""):
-    """Map job labels (or runner name) to a runner group name."""
+    """Map runner name or job labels to a runner group name.
+
+    Checks runner name prefixes first (scale set runners have empty labels),
+    then falls back to label matching for legacy/static runners.
+    """
+    # Check runner name prefix first (scale set runners have no labels)
+    if runner_name:
+        for prefix_group in config.get("runner_name_prefixes", []):
+            if runner_name.startswith(prefix_group["prefix"]):
+                return prefix_group["name"], prefix_group.get("self_hosted", False)
+    # Then try label matching
     label_set = set(labels) if labels else set()
     for group in config.get("label_groups", []):
         required = set(group["labels"])
         if required <= label_set:
             return group["name"], group.get("self_hosted", False)
-    # Fall back to runner name prefix matching (for scale set runners with empty labels)
-    if runner_name:
-        for prefix_group in config.get("runner_name_prefixes", []):
-            if runner_name.startswith(prefix_group["prefix"]):
-                return prefix_group["name"], prefix_group.get("self_hosted", False)
     return "Other", False
 
 
