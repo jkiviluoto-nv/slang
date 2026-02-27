@@ -12,6 +12,7 @@ import time
 
 MAX_RETRIES = 3
 RETRY_BACKOFF_SECONDS = 2
+GH_COMMAND_TIMEOUT = 120  # seconds per attempt
 
 
 def _is_retryable_error(stderr):
@@ -34,7 +35,19 @@ def _run_gh_command(cmd):
     """Run a gh command with retry for transient failures."""
     last_result = None
     for attempt in range(MAX_RETRIES):
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=GH_COMMAND_TIMEOUT
+            )
+        except subprocess.TimeoutExpired:
+            # Treat timeout as retryable
+            if attempt == MAX_RETRIES - 1:
+                # Return a fake failed result
+                return subprocess.CompletedProcess(
+                    cmd, 1, stdout="", stderr="Command timed out"
+                )
+            time.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
+            continue
         last_result = result
         if result.returncode == 0:
             return result
