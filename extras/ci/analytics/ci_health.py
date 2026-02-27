@@ -457,7 +457,7 @@ def generate_health_html(queue_data, failures, output_dir):
                 name = g.get("name", "")
                 queued = g.get("queued", 0)
                 running = g.get("running", 0)
-                queue_html += f"<tr><td>{name}</td><td>{queued}</td><td>{running}</td>"
+                queue_html += f"<tr><td>{_esc(name)}</td><td>{queued}</td><td>{running}</td>"
                 if queue_data.get("runners_available"):
                     runners = g.get("runners", {})
                     idle = runners.get("idle", 0)
