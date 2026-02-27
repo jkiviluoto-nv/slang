@@ -210,19 +210,6 @@ def build_history_chart(snapshots):
     gcp_vm_groups = ["Linux GPU (GCP)", "Windows GPU (GCP)"]
     palette = {"Linux GPU (GCP)": "#0d6efd", "Windows GPU (GCP)": "#28a745"}
 
-    datasets = []
-    for g in gcp_vm_groups:
-        color = palette[g]
-        online_data = [s.get("runner_groups", {}).get(g, {}).get("total", 0) for s in snapshots]
-        datasets.append({
-            "label": g,
-            "data": online_data,
-            "borderColor": color,
-            "backgroundColor": color + "55",
-            "fill": True,
-            "tension": 0.3,
-        })
-
     # Queue depth over time
     queued_data = [s.get("jobs_queued", 0) for s in snapshots]
     running_data = [s.get("jobs_running", 0) for s in snapshots]
@@ -396,7 +383,7 @@ def generate_health_html(queue_data, failures, output_dir):
                     runners_html += f"<tr><td>{name}</td><td>{state}</td><td>{job_info}</td></tr>\n"
                 runners_html += "</table>\n"
         else:
-            runners_html = "<p>No GCP GPU runners online.</p>"
+            runners_html = "<p>No GCP GPU runners online (other online runners may be listed below).</p>"
 
         # Other runners (non-GCP GPU, online only)
         other_runners = [
