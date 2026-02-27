@@ -11,7 +11,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-      administration: read
 
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +24,7 @@ jobs:
 
       - name: Generate health page
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.CI_ANALYTICS_PAT }}
         run: |
           python3 extras/ci/analytics/ci_health.py \
             --output ci_analytics_repo
