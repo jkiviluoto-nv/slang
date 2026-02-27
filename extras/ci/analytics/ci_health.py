@@ -190,9 +190,16 @@ def build_history_chart(snapshots):
     queued_data = [s.get("jobs_queued", 0) for s in snapshots]
     running_data = [s.get("jobs_running", 0) for s in snapshots]
 
+    # Active CI workflow runs over time
+    runs_in_progress = [s.get("runs_in_progress", 0) for s in snapshots]
+    runs_queued = [s.get("runs_queued", 0) for s in snapshots]
+
     return f"""
 <div style="position:relative;width:100%;max-width:1200px;margin:20px 0">
   <canvas id="runnerHistory"></canvas>
+</div>
+<div style="position:relative;width:100%;max-width:1200px;margin:20px 0">
+  <canvas id="workflowHistory"></canvas>
 </div>
 <div style="position:relative;width:100%;max-width:1200px;margin:20px 0">
   <canvas id="queueHistory"></canvas>
@@ -209,6 +216,21 @@ new Chart(document.getElementById('runnerHistory').getContext('2d'), {{
     responsive: true,
     scales: {{y: {{min: 0, stacked: true, title: {{display: true, text: 'GCP VMs Online'}}}}}},
     plugins: {{title: {{display: true, text: 'GCP Runner VMs (24h)'}}}}
+  }}
+}});
+new Chart(document.getElementById('workflowHistory').getContext('2d'), {{
+  type: 'line',
+  data: {{
+    labels: {json.dumps(timestamps)},
+    datasets: [
+      {{label: 'Runs In Progress', data: {json.dumps(runs_in_progress)}, borderColor: '#0d6efd', fill: true, backgroundColor: 'rgba(13,110,253,0.1)', tension: 0.3}},
+      {{label: 'Runs Queued', data: {json.dumps(runs_queued)}, borderColor: '#ffc107', fill: true, backgroundColor: 'rgba(255,193,7,0.1)', tension: 0.3}}
+    ]
+  }},
+  options: {{
+    responsive: true,
+    scales: {{y: {{min: 0, title: {{display: true, text: 'Workflow Runs'}}}}}},
+    plugins: {{title: {{display: true, text: 'Active CI Workflows (24h)'}}}}
   }}
 }});
 new Chart(document.getElementById('queueHistory').getContext('2d'), {{
