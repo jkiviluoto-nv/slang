@@ -177,7 +177,7 @@ jobs:
   # SlangPy will build Slang from source and run tests against SlangPy TOT
   trigger-slangpy-tests:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: inputs.full-gpu-tests && (github.event_name == 'pull_request' || inputs.config == 'release')
 
     steps:
       - name: Trigger SlangPy CI

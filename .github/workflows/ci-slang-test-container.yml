@@ -197,10 +197,11 @@ jobs:
   # SlangPy will build Slang from source and run tests against SlangPy TOT
   trigger-slangpy-tests:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: always()
 
     steps:
       - name: Trigger SlangPy CI
+        if: github.event_name == 'pull_request'
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.SLANGPY_DISPATCH_TOKEN }}
