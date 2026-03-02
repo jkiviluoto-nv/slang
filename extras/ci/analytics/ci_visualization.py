@@ -258,8 +258,15 @@ function downloadChart(canvasId, bg) {
 function copyChart(canvasId, bg) {
   var tmp = renderChartPng(canvasId, bg);
   if (!tmp) return;
+  if (!window.isSecureContext || !navigator.clipboard || !window.ClipboardItem) {
+    console.error('Clipboard API not available (requires HTTPS or localhost)');
+    downloadChart(canvasId, bg);
+    return;
+  }
   tmp.toBlob(function(blob) {
-    navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+    navigator.clipboard.write([new ClipboardItem({'image/png': blob})]).catch(function(err) {
+      console.error('Failed to copy chart to clipboard:', err);
+    });
   }, 'image/png');
 }
 """
