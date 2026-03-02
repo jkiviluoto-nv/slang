@@ -25,6 +25,7 @@
 #include "slang-hlsl-to-vulkan-layout-options.h"
 #include "slang-profile.h"
 #include "slang-repro.h"
+#include "slang-rich-diagnostics.h"
 #include "slang-serialize-ir.h"
 #include "slang.h"
 
@@ -45,6 +46,9 @@ struct Option
     const char* name;
     const char* usage = nullptr;
     const char* description = nullptr;
+    const char* displayName = nullptr;
+    const CommandOptions::InputLink* links = nullptr;
+    Count linkCount = 0;
 };
 
 enum class ValueCategory
@@ -100,8 +104,14 @@ static void _addOptions(const ConstArrayView<Option>& options, CommandOptions& c
 {
     for (auto& opt : options)
     {
-        cmdOptions
-            .add(opt.name, opt.usage, opt.description, CommandOptions::UserValue(opt.optionKind));
+        cmdOptions.add(
+            opt.name,
+            opt.usage,
+            opt.description,
+            CommandOptions::UserValue(opt.optionKind),
+            opt.displayName,
+            opt.links,
+            opt.linkCount);
     }
 }
 
@@ -604,6 +614,21 @@ void initCommandOptions(CommandOptions& options)
         vkShiftNames.reduceLength(vkShiftNames.getLength() - 1);
     }
 
+    static const CommandOptions::InputLink kVulkanBindShiftLinks[] = {
+        {"DXC description",
+         "https://github.com/Microsoft/DirectXShaderCompiler/blob/main/docs/"
+         "SPIR-V.rst#implicit-binding-number-assignment"},
+        {"GLSL wiki",
+         "https://github.com/KhronosGroup/glslang/wiki/"
+         "HLSL-FAQ#auto-mapped-binding-numbers"},
+    };
+
+    static const CommandOptions::InputLink kVulkanBindGlobalsLinks[] = {
+        {"DXC description",
+         "https://github.com/Microsoft/DirectXShaderCompiler/blob/main/docs/"
+         "SPIR-V.rst#implicit-binding-number-assignment"},
+    };
+
     const Option targetOpts[] = {
         {OptionKind::Capability,
          "-capability",
@@ -690,22 +715,18 @@ void initCommandOptions(CommandOptions& options)
          "shift the "
          "inferred binding numbers for more than one space, provide more than one such option. "
          "If more than one such option is provided for the same space, the last one takes effect. "
-         "If you need to shift the inferred binding numbers for all sets, use 'all' as <space>. "
-         "\n"
-         "* [DXC "
-         "description](https://github.com/Microsoft/DirectXShaderCompiler/blob/main/docs/"
-         "SPIR-V.rst#implicit-binding-number-assignment)\n"
-         "* [GLSL "
-         "wiki](https://github.com/KhronosGroup/glslang/wiki/"
-         "HLSL-FAQ#auto-mapped-binding-numbers)\n"},
+         "If you need to shift the inferred binding numbers for all sets, use 'all' as <space>.",
+         "-fvk-<vulkan-shift>-shift",
+         kVulkanBindShiftLinks,
+         SLANG_COUNT_OF(kVulkanBindShiftLinks)},
         {OptionKind::VulkanBindGlobals,
          "-fvk-bind-globals",
          "-fvk-bind-globals <N> <descriptor-set>",
          "Places the $Globals cbuffer at descriptor set <descriptor-set> and binding <N>.\n"
-         "It lets you specify the descriptor for the source at a certain register.\n"
-         "* [DXC "
-         "description](https://github.com/Microsoft/DirectXShaderCompiler/blob/main/docs/"
-         "SPIR-V.rst#implicit-binding-number-assignment)\n"},
+         "It lets you specify the descriptor for the source at a certain register.",
+         nullptr,
+         kVulkanBindGlobalsLinks,
+         SLANG_COUNT_OF(kVulkanBindGlobalsLinks)},
         {OptionKind::VulkanInvertY,
          "-fvk-invert-y",
          nullptr,
@@ -751,6 +772,16 @@ void initCommandOptions(CommandOptions& options)
          "-bindless-space-index",
          "-bindless-space-index <index>",
          "Specify the space index for the system defined global bindless resource array."},
+        {OptionKind::SPIRVResourceHeapStride,
+         "-spirv-resource-heap-stride",
+         "-spirv-resource-heap-stride <stride>",
+         "Specify the byte stride for the resource descriptor heap when generating SPIRV with "
+         "spvDescriptorHeapEXT. Defaults to 0, which will use OpConstantSizeOfEXT(ResourceType)."},
+        {OptionKind::SPIRVSamplerHeapStride,
+         "-spirv-sampler-heap-stride",
+         "-spirv-sampler-heap-stride <stride>",
+         "Specify the byte stride for the sampler descriptor heap when generating SPIRV with "
+         "spvDescriptorHeapEXT. Defaults to 0, which will use OpConstantSizeOfEXT(OpTypeSampler)."},
         {OptionKind::EmitSeparateDebug,
          "-separate-debug-info",
          nullptr,
@@ -802,7 +833,8 @@ void initCommandOptions(CommandOptions& options)
             "-<compiler>-path <path>",
             "Specify path to a downstream <compiler> "
             "executable or library.\n",
-            UserValue(OptionKind::CompilerPath));
+            UserValue(OptionKind::CompilerPath),
+            "-<compiler>-path");
     }
 
     const Option downstreamOpts[] = {
@@ -995,6 +1027,10 @@ void initCommandOptions(CommandOptions& options)
          "-enable-machine-readable-diagnostics",
          nullptr,
          "Enable machine-readable diagnostic output in tab-separated format"},
+        {OptionKind::DiagnosticColor,
+         "-diagnostic-color",
+         "-diagnostic-color <always|never|auto>",
+         "Control colored diagnostic output (auto uses color if stderr is a tty)"},
     };
     _addOptions(makeConstArrayView(experimentalOpts), options);
 
@@ -1272,6 +1308,8 @@ struct OptionsParser
 
     SlangResult _expectValue(ValueCategory valueCategory, CommandOptions::UserValue& outValue);
     SlangResult _expectInt(const CommandLineArg& arg, Int& outInt);
+    SlangResult _expectUInt(const CommandLineArg& arg, Int& outInt);
+
 
     template<typename T>
     SlangResult _expectValue(T& ioValue)
@@ -1900,11 +1938,24 @@ SlangResult OptionsParser::_expectInt(const CommandLineArg& initArg, Int& outInt
 
     if (SLANG_FAILED(StringUtil::parseInt(arg.value.getUnownedSlice(), outInt)))
     {
-        m_sink->diagnose(arg.loc, Diagnostics::expectingAnInteger);
+        m_sink->diagnose(arg.loc, Diagnostics::expectingAnInteger, initArg.value);
         return SLANG_FAIL;
     }
     return SLANG_OK;
 }
+
+SlangResult OptionsParser::_expectUInt(const CommandLineArg& initArg, Int& outInt)
+{
+    SLANG_RETURN_ON_FAIL(_expectInt(initArg, outInt));
+    if (outInt < 0)
+    {
+        m_sink
+            ->diagnose(initArg.loc, Diagnostics::expectingAUnsignedInteger, initArg.value, outInt);
+        return SLANG_FAIL;
+    }
+    return SLANG_OK;
+}
+
 
 SlangResult createArtifactFromReferencedModule(
     String path,
@@ -2351,8 +2402,14 @@ SlangResult OptionsParser::_parse(int argc, char const* const* argv)
         case OptionKind::PreserveParameters:
         case OptionKind::UseMSVCStyleBitfieldPacking:
         case OptionKind::ExperimentalFeature:
+            linkage->m_optionSet.set(optionKind, true);
+            break;
         case OptionKind::EnableRichDiagnostics:
             linkage->m_optionSet.set(optionKind, true);
+            // Update the sink and all ancestor sinks so diagnostics emitted during option
+            // parsing are properly formatted
+            for (DiagnosticSink* sink = m_sink; sink; sink = sink->getParentSink())
+                sink->setFlag(DiagnosticSink::Flag::AlwaysGenerateRichDiagnostics);
             break;
         case OptionKind::ReportDetailedPerfBenchmark:
             linkage->m_optionSet.set(optionKind, true);
@@ -2363,7 +2420,39 @@ SlangResult OptionsParser::_parse(int argc, char const* const* argv)
             linkage->m_optionSet.set(optionKind, true);
             // -enable-machine-readable-diagnostics implies -enable-experimental-rich-diagnostics
             linkage->m_optionSet.set(OptionKind::EnableRichDiagnostics, true);
+            // Update the sink and all ancestor sinks so diagnostics emitted during option
+            // parsing are properly formatted
+            for (DiagnosticSink* sink = m_sink; sink; sink = sink->getParentSink())
+            {
+                sink->setFlag(DiagnosticSink::Flag::AlwaysGenerateRichDiagnostics);
+                sink->setFlag(DiagnosticSink::Flag::MachineReadableDiagnostics);
+            }
             break;
+        case OptionKind::DiagnosticColor:
+            {
+                CommandLineArg colorArg;
+                SLANG_RETURN_ON_FAIL(m_reader.expectArg(colorArg));
+                SlangDiagnosticColor colorValue = SLANG_DIAGNOSTIC_COLOR_AUTO;
+                if (colorArg.value == "always")
+                    colorValue = SLANG_DIAGNOSTIC_COLOR_ALWAYS;
+                else if (colorArg.value == "never")
+                    colorValue = SLANG_DIAGNOSTIC_COLOR_NEVER;
+                else if (colorArg.value == "auto")
+                    colorValue = SLANG_DIAGNOSTIC_COLOR_AUTO;
+                else
+                {
+                    m_sink->diagnose(
+                        colorArg.loc,
+                        Diagnostics::unknownCommandLineValue,
+                        "always, never, auto");
+                    return SLANG_FAIL;
+                }
+                linkage->m_optionSet.set(optionKind, (int)colorValue);
+                // Update the sink and all ancestor sinks so colors work correctly
+                for (DiagnosticSink* sink = m_sink; sink; sink = sink->getParentSink())
+                    sink->setDiagnosticColorMode(colorValue);
+                break;
+            }
         case OptionKind::MatrixLayoutRow:
         case OptionKind::MatrixLayoutColumn:
             linkage->m_optionSet.setMatrixLayoutMode(
@@ -3195,10 +3284,12 @@ SlangResult OptionsParser::_parse(int argc, char const* const* argv)
                 break;
             }
         case OptionKind::BindlessSpaceIndex:
+        case OptionKind::SPIRVSamplerHeapStride:
+        case OptionKind::SPIRVResourceHeapStride:
             {
                 Int index = 0;
-                SLANG_RETURN_ON_FAIL(_expectInt(arg, index));
-                linkage->m_optionSet.add(OptionKind::BindlessSpaceIndex, (int)index);
+                SLANG_RETURN_ON_FAIL(_expectUInt(arg, index));
+                linkage->m_optionSet.add(optionKind, (int)index);
                 break;
             }
         case OptionKind::DumpModule:
@@ -3405,6 +3496,11 @@ SlangResult OptionsParser::_parse(int argc, char const* const* argv)
             }
         }
     }
+
+    // Apply diagnostic sink settings early so that any diagnostics emitted during
+    // option post-processing (e.g., entry point validation) use the correct settings
+    // such as rich diagnostics and machine-readable output.
+    applySettingsToDiagnosticSink(m_requestImpl->getSink(), m_sink, linkage->m_optionSet);
 
     if (m_compileCoreModule)
     {
@@ -4195,6 +4291,9 @@ SlangResult OptionsParser::parse(
         // Leaving allows for diagnostics to be compatible with other Slang diagnostic parsing.
         // parseSink.resetFlag(DiagnosticSink::Flag::HumaneLoc);
         m_parseSink.setFlag(DiagnosticSink::Flag::SourceLocationLine);
+        // Copy color and unicode settings from the request sink
+        m_parseSink.setDiagnosticColorMode(requestSink->getDiagnosticColorMode());
+        m_parseSink.setEnableUnicode(requestSink->getEnableUnicode());
     }
 
     // All diagnostics will also be sent to requestSink

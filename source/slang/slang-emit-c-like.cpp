@@ -1460,6 +1460,8 @@ bool CLikeSourceEmitter::shouldFoldInstIntoUseSites(IRInst* inst)
     case kIROp_UpdateElement:
     case kIROp_DefaultConstruct:
     case kIROp_MetalCastToDepthTexture:
+    case kIROp_LoadResourceDescriptorFromHeap:
+    case kIROp_LoadSamplerDescriptorFromHeap:
         return false;
 
     // Always fold these in, because they are trivial
@@ -4144,6 +4146,13 @@ String CLikeSourceEmitter::_emitLiteralOneWithType(int bitWidth)
             one = "u32(1)";
             return one;
         }
+    }
+
+    // uint32_t is only available in HLSL 2018+ (-HV 2018), so we use uint
+    // which is valid in all HLSL versions and maps to the same DXIL type.
+    if (getTarget() == CodeGenTarget::HLSL && bitWidth == 32)
+    {
+        return "uint(1)";
     }
 
     String one;

@@ -1622,6 +1622,12 @@ public:
 
     Expr* _CheckTerm(Expr* term);
 
+    /// If inside a lambda body, check whether `exprIn` (or its base sub-expression chain)
+    /// references an outer-scope variable that needs to be captured into the lambda struct.
+    /// This handles the case where an expression was already checked by the parser's
+    /// two-phase generic disambiguation before the lambda capture context was established.
+    Expr* maybeRegisterLambdaCapture(Expr* exprIn);
+
     Expr* CreateErrorExpr(Expr* expr);
 
     bool IsErrorExpr(Expr* expr);
@@ -1792,6 +1798,17 @@ public:
     /// when a conversion is being done "for real" so that diagnostics
     /// should be emitted on failure.
     ///
+    /// If `outWitnessOfConversion` is non-null and zero valid conversions are found
+    /// `outWitnessOfConversion` will be set to a `nullptr`.
+    ///
+    /// If `outWitnessOfConversion` is non-null and a conversion is found,
+    /// `outWitnessOfConversion` will either be set to:
+    /// (1) `BuiltinTypeCoercionWitness*` to signify that Slang casts without
+    /// a user-definition.
+    /// (2) `DeclRefTypeCoercionWitness*` to signify that Slang will cast
+    /// via a user-definition.
+    /// (3) `nullptr` to signify that the case is unhandled and should be handled
+    ///
     bool _coerce(
         CoercionSite site,
         Type* toType,
@@ -1799,7 +1816,8 @@ public:
         QualType fromType,
         Expr* fromExpr,
         DiagnosticSink* sink,
-        ConversionCost* outCost);
+        ConversionCost* outCost,
+        TypeCoercionWitness** outWitnessOfConversion);
 
     /// Check whether implicit type coercion from `fromType` to `toType` is possible.
     ///
@@ -3110,7 +3128,6 @@ public:
 
     void maybeCheckKnownBuiltinInvocation(Expr* invokeExpr);
 
-    Expr* maybeRegisterLambdaCapture(Expr* exprIn);
     //
     // Some syntax nodes should not occur in the concrete input syntax,
     // and will only appear *after* checking is complete. We need to
@@ -3343,5 +3360,25 @@ RefPtr<ComponentType> createSpecializedGlobalComponentType(EndToEndCompileReques
 RefPtr<ComponentType> createSpecializedGlobalAndEntryPointsComponentType(
     EndToEndCompileRequest* endToEndReq,
     List<RefPtr<ComponentType>>& outSpecializedEntryPoints);
+
+// Returns `false` if coerce fails.
+// * `constraintDecl` is the constraint we need to satisfy
+// * `genericDeclRef` is the generic decl we are operating on
+// * `maybeContext` is the contect for our current operation. This variable must be filled if
+// `shouldEmitError == true`.
+// * `maybeConstrainedGenericParams` contains set of constrained params relative to `genericDeclRef`
+// and current context.
+//   This param is optional. Coercion `toType` and `fromType` will be added to the set if function
+//   succeeds.
+// * `args` are the current arguments relative to `genericDeclRef`.
+bool addTypeCoercionWitnessToArgs(
+    ASTBuilder* astBuilder,
+    SemanticsVisitor* visitor,
+    TypeCoercionConstraintDecl* constraintDecl,
+    DeclRef<GenericDecl> genericDeclRef,
+    SemanticsVisitor::OverloadResolveContext* maybeContext,
+    HashSet<Decl*>* maybeConstrainedGenericParams,
+    ShortList<Val*>& args,
+    bool shouldEmitError);
 
 } // namespace Slang
