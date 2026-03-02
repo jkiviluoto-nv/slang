@@ -184,15 +184,41 @@ def chart_section(chart_id, title, description="", canvas_style=""):
 
 
 DOWNLOAD_JS = """
+function wrapText(ctx, text, maxWidth) {
+  if (!text) return [];
+  var words = text.split(/\\s+/);
+  var lines = [];
+  var cur = '';
+  for (var i = 0; i < words.length; i++) {
+    var test = cur ? (cur + ' ' + words[i]) : words[i];
+    if (ctx.measureText(test).width > maxWidth && cur) {
+      lines.push(cur);
+      cur = words[i];
+    } else {
+      cur = test;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
 function renderChartPng(canvasId, bg) {
   var canvas = document.getElementById(canvasId);
   if (!canvas || !bg) return null;
   var title = canvas.getAttribute('data-title') || '';
   var desc = canvas.getAttribute('data-desc') || '';
   var pad = 16;
-  var titleH = title ? 28 : 0;
-  var descH = desc ? 18 : 0;
-  var headerH = titleH + descH + (titleH || descH ? pad : 0);
+  var titleFont = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  var descFont = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  var titleLineH = 22;
+  var descLineH = 16;
+  var maxTextW = canvas.width;
+  var probe = document.createElement('canvas').getContext('2d');
+  probe.font = titleFont;
+  var titleLines = wrapText(probe, title, maxTextW);
+  probe.font = descFont;
+  var descLines = wrapText(probe, desc, maxTextW);
+  var headerH = titleLines.length * titleLineH + descLines.length * descLineH;
+  if (headerH > 0) headerH += pad;
   var tmp = document.createElement('canvas');
   tmp.width = canvas.width + pad * 2;
   tmp.height = canvas.height + headerH + pad;
@@ -202,16 +228,21 @@ function renderChartPng(canvasId, bg) {
     ctx.fillRect(0, 0, tmp.width, tmp.height);
   }
   var y = pad;
-  if (title) {
-    ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  if (titleLines.length) {
+    ctx.font = titleFont;
     ctx.fillStyle = '#212529';
-    ctx.fillText(title, pad, y + 16);
-    y += titleH;
+    for (var i = 0; i < titleLines.length; i++) {
+      ctx.fillText(titleLines[i], pad, y + titleLineH - 6);
+      y += titleLineH;
+    }
   }
-  if (desc) {
-    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  if (descLines.length) {
+    ctx.font = descFont;
     ctx.fillStyle = '#6c757d';
-    ctx.fillText(desc, pad, y + 12);
+    for (var j = 0; j < descLines.length; j++) {
+      ctx.fillText(descLines[j], pad, y + descLineH - 4);
+      y += descLineH;
+    }
   }
   ctx.drawImage(canvas, pad, headerH);
   return tmp;
