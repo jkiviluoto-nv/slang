@@ -181,6 +181,7 @@ jobs:
 
     steps:
       - name: Trigger SlangPy CI
+        if: github.event_name == 'pull_request'
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.SLANGPY_DISPATCH_TOKEN }}
