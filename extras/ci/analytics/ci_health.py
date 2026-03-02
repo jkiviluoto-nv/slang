@@ -23,7 +23,7 @@ from datetime import datetime, timezone, timedelta
 
 # Import the page template from ci_visualization
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ci_visualization import page_template
+from ci_visualization import page_template, DOWNLOAD_JS
 
 
 DEFAULT_REPO = "shader-slang/slang"
@@ -249,17 +249,51 @@ def build_history_chart(snapshots):
     <option value="24" selected>Last 24 hours</option>
   </select>
 </div>
-<div style="position:relative;width:100%;max-width:1200px;margin:20px 0">
-  <canvas id="runnerHistory"></canvas>
+<div class="chart-section" id="runnerVMs">
+  <h3>GCP Runner VMs <a class="anchor" href="#runnerVMs">#</a>
+  <select class="download-btn" onchange="downloadChart('runnerHistory', this.value); this.selectedIndex=0">
+    <option value="" disabled selected>Download PNG</option>
+    <option value="transparent">Transparent</option>
+    <option value="white">White background</option>
+  </select>
+  <select class="download-btn" onchange="copyChart('runnerHistory', this.value); this.selectedIndex=0">
+    <option value="" disabled selected>Copy PNG</option>
+    <option value="transparent">Transparent</option>
+    <option value="white">White background</option>
+  </select></h3>
+  <div class="chart-container"><canvas id="runnerHistory" data-title="GCP Runner VMs"></canvas></div>
 </div>
-<div style="position:relative;width:100%;max-width:1200px;margin:20px 0">
-  <canvas id="workflowHistory"></canvas>
+<div class="chart-section" id="activeWorkflows">
+  <h3>Active CI Workflows <a class="anchor" href="#activeWorkflows">#</a>
+  <select class="download-btn" onchange="downloadChart('workflowHistory', this.value); this.selectedIndex=0">
+    <option value="" disabled selected>Download PNG</option>
+    <option value="transparent">Transparent</option>
+    <option value="white">White background</option>
+  </select>
+  <select class="download-btn" onchange="copyChart('workflowHistory', this.value); this.selectedIndex=0">
+    <option value="" disabled selected>Copy PNG</option>
+    <option value="transparent">Transparent</option>
+    <option value="white">White background</option>
+  </select></h3>
+  <div class="chart-container"><canvas id="workflowHistory" data-title="Active CI Workflows"></canvas></div>
 </div>
-<div style="position:relative;width:100%;max-width:1200px;margin:20px 0">
-  <canvas id="queueHistory"></canvas>
+<div class="chart-section" id="jobQueue">
+  <h3>Job Queue Depth <a class="anchor" href="#jobQueue">#</a>
+  <select class="download-btn" onchange="downloadChart('queueHistory', this.value); this.selectedIndex=0">
+    <option value="" disabled selected>Download PNG</option>
+    <option value="transparent">Transparent</option>
+    <option value="white">White background</option>
+  </select>
+  <select class="download-btn" onchange="copyChart('queueHistory', this.value); this.selectedIndex=0">
+    <option value="" disabled selected>Copy PNG</option>
+    <option value="transparent">Transparent</option>
+    <option value="white">White background</option>
+  </select></h3>
+  <div class="chart-container"><canvas id="queueHistory" data-title="Job Queue Depth"></canvas></div>
 </div>
 <script src="{CHARTJS_CDN}"></script>
 <script>
+{DOWNLOAD_JS}
 // All snapshot data
 const allTimestamps = {json.dumps(timestamps)};
 const allRunnerData = {json.dumps({g: group_series[g] for g in gcp_vm_groups})};
@@ -306,8 +340,7 @@ function buildCharts(hours) {{
     data: {{ labels: displayLabels, datasets: runnerDatasets }},
     options: {{
       responsive: true,
-      scales: {{ y: {{ min: 0, stacked: true, title: {{ display: true, text: 'GCP VMs Online' }} }} }},
-      plugins: {{ title: {{ display: true, text: 'GCP Runner VMs' }} }}
+      scales: {{ y: {{ min: 0, stacked: true, title: {{ display: true, text: 'GCP VMs Online' }} }} }}
     }}
   }});
 
@@ -323,8 +356,7 @@ function buildCharts(hours) {{
     }},
     options: {{
       responsive: true,
-      scales: {{ y: {{ min: 0, title: {{ display: true, text: 'Workflow Runs' }} }} }},
-      plugins: {{ title: {{ display: true, text: 'Active CI Workflows' }} }}
+      scales: {{ y: {{ min: 0, title: {{ display: true, text: 'Workflow Runs' }} }} }}
     }}
   }});
 
@@ -340,8 +372,7 @@ function buildCharts(hours) {{
     }},
     options: {{
       responsive: true,
-      scales: {{ y: {{ min: 0, title: {{ display: true, text: 'Jobs' }} }} }},
-      plugins: {{ title: {{ display: true, text: 'Job Queue Depth' }} }}
+      scales: {{ y: {{ min: 0, title: {{ display: true, text: 'Jobs' }} }} }}
     }}
   }});
 }}
@@ -519,7 +550,7 @@ def generate_health_html(queue_data, failures, output_dir):
 <h2>Queue Status</h2>
 {queue_html}
 
-<h2>24h Load History</h2>
+<h2>Load History</h2>
 {history_html}
 
 <h2>Self-Hosted Runner Status</h2>
