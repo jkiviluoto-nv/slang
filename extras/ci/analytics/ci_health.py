@@ -23,7 +23,7 @@ from datetime import datetime, timezone, timedelta
 
 # Import the page template from ci_visualization
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ci_visualization import page_template, DOWNLOAD_JS
+from ci_visualization import page_template, chart_section, DOWNLOAD_JS
 
 
 DEFAULT_REPO = "shader-slang/slang"
@@ -240,8 +240,14 @@ def build_history_chart(snapshots):
     for g in gcp_vm_groups:
         group_series[g] = [s.get("runner_groups", {}).get(g, {}).get("total", 0) for s in snapshots]
 
+    charts_html = (
+        chart_section("runnerHistory", "GCP Runner VMs")
+        + chart_section("workflowHistory", "Active CI Workflows")
+        + chart_section("queueHistory", "Job Queue Depth")
+    )
+
     return f"""
-<div style="margin-bottom:15px">
+<div class="chart-section">
   <label>Time window: </label>
   <select id="historyRange" onchange="updateHistoryRange()">
     <option value="4">Last 4 hours</option>
@@ -249,48 +255,7 @@ def build_history_chart(snapshots):
     <option value="24" selected>Last 24 hours</option>
   </select>
 </div>
-<div class="chart-section" id="runnerVMs">
-  <h3>GCP Runner VMs <a class="anchor" href="#runnerVMs">#</a>
-  <select class="download-btn" onchange="downloadChart('runnerHistory', this.value); this.selectedIndex=0">
-    <option value="" disabled selected>Download PNG</option>
-    <option value="transparent">Transparent</option>
-    <option value="white">White background</option>
-  </select>
-  <select class="download-btn" onchange="copyChart('runnerHistory', this.value); this.selectedIndex=0">
-    <option value="" disabled selected>Copy PNG</option>
-    <option value="transparent">Transparent</option>
-    <option value="white">White background</option>
-  </select></h3>
-  <div class="chart-container"><canvas id="runnerHistory" data-title="GCP Runner VMs"></canvas></div>
-</div>
-<div class="chart-section" id="activeWorkflows">
-  <h3>Active CI Workflows <a class="anchor" href="#activeWorkflows">#</a>
-  <select class="download-btn" onchange="downloadChart('workflowHistory', this.value); this.selectedIndex=0">
-    <option value="" disabled selected>Download PNG</option>
-    <option value="transparent">Transparent</option>
-    <option value="white">White background</option>
-  </select>
-  <select class="download-btn" onchange="copyChart('workflowHistory', this.value); this.selectedIndex=0">
-    <option value="" disabled selected>Copy PNG</option>
-    <option value="transparent">Transparent</option>
-    <option value="white">White background</option>
-  </select></h3>
-  <div class="chart-container"><canvas id="workflowHistory" data-title="Active CI Workflows"></canvas></div>
-</div>
-<div class="chart-section" id="jobQueue">
-  <h3>Job Queue Depth <a class="anchor" href="#jobQueue">#</a>
-  <select class="download-btn" onchange="downloadChart('queueHistory', this.value); this.selectedIndex=0">
-    <option value="" disabled selected>Download PNG</option>
-    <option value="transparent">Transparent</option>
-    <option value="white">White background</option>
-  </select>
-  <select class="download-btn" onchange="copyChart('queueHistory', this.value); this.selectedIndex=0">
-    <option value="" disabled selected>Copy PNG</option>
-    <option value="transparent">Transparent</option>
-    <option value="white">White background</option>
-  </select></h3>
-  <div class="chart-container"><canvas id="queueHistory" data-title="Job Queue Depth"></canvas></div>
-</div>
+{charts_html}
 <script src="{CHARTJS_CDN}"></script>
 <script>
 {DOWNLOAD_JS}
@@ -335,7 +300,7 @@ function buildCharts(hours) {{
       tension: 0.3,
     }});
   }}
-  charts.runner = new Chart(document.getElementById('runnerHistory').getContext('2d'), {{
+  charts.runner = new Chart(document.getElementById('runnerHistory_canvas').getContext('2d'), {{
     type: 'line',
     data: {{ labels: displayLabels, datasets: runnerDatasets }},
     options: {{
@@ -345,7 +310,7 @@ function buildCharts(hours) {{
   }});
 
   // Workflow runs
-  charts.workflow = new Chart(document.getElementById('workflowHistory').getContext('2d'), {{
+  charts.workflow = new Chart(document.getElementById('workflowHistory_canvas').getContext('2d'), {{
     type: 'line',
     data: {{
       labels: displayLabels,
@@ -361,7 +326,7 @@ function buildCharts(hours) {{
   }});
 
   // Job queue
-  charts.queue = new Chart(document.getElementById('queueHistory').getContext('2d'), {{
+  charts.queue = new Chart(document.getElementById('queueHistory_canvas').getContext('2d'), {{
     type: 'line',
     data: {{
       labels: displayLabels,
