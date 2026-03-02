@@ -173,15 +173,20 @@ def chart_section(chart_id, title, description="", canvas_style=""):
     <option value="" disabled selected>Download PNG</option>
     <option value="transparent">Transparent</option>
     <option value="white">White background</option>
+  </select>
+  <select class="download-btn" onchange="copyChart('{chart_id}_canvas', this.value); this.selectedIndex=0">
+    <option value="" disabled selected>Copy PNG</option>
+    <option value="transparent">Transparent</option>
+    <option value="white">White background</option>
   </select></h2>{desc_html}
   <div class="chart-container"{style_attr}><canvas id="{chart_id}_canvas" data-title="{title_attr}" data-desc="{desc_attr}"></canvas></div>
 </div>"""
 
 
 DOWNLOAD_JS = """
-function downloadChart(canvasId, bg) {
+function renderChartPng(canvasId, bg) {
   var canvas = document.getElementById(canvasId);
-  if (!canvas || !bg) return;
+  if (!canvas || !bg) return null;
   var title = canvas.getAttribute('data-title') || '';
   var desc = canvas.getAttribute('data-desc') || '';
   var pad = 16;
@@ -209,10 +214,22 @@ function downloadChart(canvasId, bg) {
     ctx.fillText(desc, pad, y + 12);
   }
   ctx.drawImage(canvas, pad, headerH);
+  return tmp;
+}
+function downloadChart(canvasId, bg) {
+  var tmp = renderChartPng(canvasId, bg);
+  if (!tmp) return;
   var link = document.createElement('a');
   link.download = canvasId.replace('_canvas', '') + '.png';
   link.href = tmp.toDataURL('image/png', 1.0);
   link.click();
+}
+function copyChart(canvasId, bg) {
+  var tmp = renderChartPng(canvasId, bg);
+  if (!tmp) return;
+  tmp.toBlob(function(blob) {
+    navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+  }, 'image/png');
 }
 """
 
