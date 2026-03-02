@@ -241,9 +241,12 @@ def build_history_chart(snapshots):
         group_series[g] = [s.get("runner_groups", {}).get(g, {}).get("total", 0) for s in snapshots]
 
     charts_html = (
-        chart_section("runnerHistory", "GCP Runner VMs")
-        + chart_section("workflowHistory", "Active CI Workflows")
-        + chart_section("queueHistory", "Job Queue Depth")
+        chart_section("runnerHistory", "GCP Runner VMs",
+            "Number of GCP-provisioned runner VMs online per group, sampled every 15 minutes.")
+        + chart_section("workflowHistory", "Active CI Workflows",
+            "CI workflow runs currently in progress or queued.")
+        + chart_section("queueHistory", "Job Queue Depth",
+            "Individual jobs waiting in queue vs. actively running on runners.")
     )
 
     return f"""
