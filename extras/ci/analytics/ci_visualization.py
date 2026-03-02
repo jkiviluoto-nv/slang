@@ -996,7 +996,7 @@ new Chart(document.getElementById('parallelRate_canvas').getContext('2d'), {{
     labels: {json.dumps(dates)},
     datasets: {json.dumps(parallel_datasets)}
   }},
-  options: {{responsive:true, scales:{{y:{{min:0,title:{{display:true,text:'Avg Concurrent Runners'}}}}}}}}
+  options: {{responsive:true, scales:{{y:{{stacked:true,min:0,title:{{display:true,text:'Avg Concurrent Runners'}}}}}}}}
 }});
 
 // Queue wait time percentiles
