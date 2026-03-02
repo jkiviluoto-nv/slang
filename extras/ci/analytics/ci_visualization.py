@@ -165,20 +165,53 @@ def chart_section(chart_id, title, description="", canvas_style=""):
     """Generate HTML for a chart section with anchor link and download button."""
     desc_html = f'\n<p style="color:#6c757d;font-size:0.9em">{description}</p>' if description else ""
     style_attr = f' style="{canvas_style}"' if canvas_style else ""
+    title_attr = html_mod.escape(title, quote=True)
+    desc_attr = html_mod.escape(description, quote=True) if description else ""
     return f"""<div class="chart-section" id="{chart_id}">
   <h2>{title} <a class="anchor" href="#{chart_id}">#</a>
-  <button class="download-btn" onclick="downloadChart('{chart_id}_canvas')">PNG</button></h2>{desc_html}
-  <div class="chart-container"{style_attr}><canvas id="{chart_id}_canvas"></canvas></div>
+  <select class="download-btn" onchange="downloadChart('{chart_id}_canvas', this.value); this.selectedIndex=0">
+    <option value="" disabled selected>Download PNG</option>
+    <option value="transparent">Transparent</option>
+    <option value="white">White background</option>
+  </select></h2>{desc_html}
+  <div class="chart-container"{style_attr}><canvas id="{chart_id}_canvas" data-title="{title_attr}" data-desc="{desc_attr}"></canvas></div>
 </div>"""
 
 
 DOWNLOAD_JS = """
-function downloadChart(canvasId) {
+function downloadChart(canvasId, bg) {
   var canvas = document.getElementById(canvasId);
-  if (!canvas) return;
+  if (!canvas || !bg) return;
+  var title = canvas.getAttribute('data-title') || '';
+  var desc = canvas.getAttribute('data-desc') || '';
+  var pad = 16;
+  var titleH = title ? 28 : 0;
+  var descH = desc ? 18 : 0;
+  var headerH = titleH + descH + (titleH || descH ? pad : 0);
+  var tmp = document.createElement('canvas');
+  tmp.width = canvas.width + pad * 2;
+  tmp.height = canvas.height + headerH + pad;
+  var ctx = tmp.getContext('2d');
+  if (bg === 'white') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, tmp.width, tmp.height);
+  }
+  var y = pad;
+  if (title) {
+    ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#212529';
+    ctx.fillText(title, pad, y + 16);
+    y += titleH;
+  }
+  if (desc) {
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#6c757d';
+    ctx.fillText(desc, pad, y + 12);
+  }
+  ctx.drawImage(canvas, pad, headerH);
   var link = document.createElement('a');
   link.download = canvasId.replace('_canvas', '') + '.png';
-  link.href = canvas.toDataURL('image/png', 1.0);
+  link.href = tmp.toDataURL('image/png', 1.0);
   link.click();
 }
 """
@@ -221,7 +254,7 @@ def page_template(title, body, active=""):
   .chart-section h2 a.anchor {{ color: #adb5bd; text-decoration: none; font-size: 0.7em; visibility: hidden; }}
   .chart-section:hover h2 a.anchor {{ visibility: visible; }}
   .chart-section h2 a.anchor:hover {{ color: #0d6efd; }}
-  .download-btn {{ font-size: 12px; color: #6c757d; cursor: pointer; border: 1px solid #dee2e6; background: white; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }}
+  .download-btn {{ font-size: 12px; color: #6c757d; cursor: pointer; border: 1px solid #dee2e6; background: white; padding: 2px 8px; border-radius: 4px; margin-left: 8px; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%236c757d'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; padding-right: 20px; }}
   .download-btn:hover {{ background: #f8f9fa; color: #333; }}
   .stat-card {{ display: inline-block; background: #f8f9fa; border-radius: 8px; padding: 15px 25px; margin: 5px; text-align: center; }}
   .stat-card .value {{ font-size: 2em; font-weight: bold; color: #212529; }}
