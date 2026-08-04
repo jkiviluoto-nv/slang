@@ -29,6 +29,7 @@
 #   library_subdir   - Destination for Unix shared libraries (e.g. "lib")
 
 include(FetchContent)
+include(DownloadWithRetry)
 
 # DXC release metadata.
 #
@@ -274,22 +275,24 @@ elseif(
                     "Authorization: token ${SLANG_GITHUB_TOKEN}"
                 )
             endif()
-            file(
-                DOWNLOAD "${_dxc_probe_url}" "${_dxc_probe_tarball}"
-                STATUS _dl_status
+            # The expected hash is passed to download_with_retry as a parameter
+            # rather than to file(DOWNLOAD) as EXPECTED_HASH, so that a failed
+            # download stays recoverable and the source-build fallback below can
+            # actually take effect. See the note in cmake/DownloadWithRetry.cmake.
+            download_with_retry(
+                "${_dxc_probe_url}"
+                "${_dxc_probe_tarball}"
+                _dl_error
                 EXPECTED_HASH "${_dxc_linux_url_hash}"
                 SHOW_PROGRESS
                 ${_dl_headers}
             )
-            list(GET _dl_status 0 _dl_code)
-            if(NOT _dl_code EQUAL 0)
-                list(GET _dl_status 1 _dl_msg)
+            if(_dl_error)
                 message(
                     WARNING
-                    "Failed to download DXC prebuilt binary: ${_dl_msg}. "
+                    "Failed to download DXC prebuilt binary: ${_dl_error}. "
                     "Building DXC from source instead."
                 )
-                file(REMOVE "${_dxc_probe_tarball}")
                 set(_dxc_build_from_source ON)
             endif()
         endif()
