@@ -1,0 +1,34 @@
+[Unit]
+Description=Vulkan-Hpp pilot scaler (%i CPU runners)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=scaler
+Group=scaler
+EnvironmentFile=/opt/scaler/vulkan-hpp-pilot.env
+ExecStart=/opt/scaler/scaler \
+    --url=https://github.com/KhronosGroup/Vulkan-Hpp \
+    --name=vulkan-hpp-pilot-%i \
+    --labels=self-hosted,vulkan-hpp-pilot-%i \
+    --platform=%i \
+    --gcp-project=${PILOT_GCP_PROJECT} \
+    --gcp-zones=${PILOT_GCP_ZONE} \
+    --gcp-instance-template=vulkan-hpp-pilot-%i-v1 \
+    --gcp-gpu-type=none \
+    --vm-prefix=vkhpp-%i \
+    --max-runners=1 \
+    --min-runners=0
+ExecReload=/bin/kill -USR1 $MAINPID
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=120
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,85 @@
+# Copy to Vulkan-Hpp/.github/workflows/scaler-pilot.yml after maintainer review.
+# Manual dispatch builds the reviewed main branch; there is no PR trigger/input.
+name: GCE scaler pilot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.repository == 'KhronosGroup/Vulkan-Hpp' && github.ref == 'refs/heads/main'
+    name: Pilot ${{ matrix.platform }}
+    runs-on: [self-hosted, "${{ matrix.label }}"]
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            label: vulkan-hpp-pilot-linux
+            generator: Ninja
+          - platform: windows
+            label: vulkan-hpp-pilot-windows
+            generator: Visual Studio 17 2022
+    steps:
+      - name: Checkout reviewed main
+        uses: actions/checkout@v6.0.0
+        with:
+          ref: main
+          submodules: recursive
+          persist-credentials: false
+      - name: Set up MSVC x64
+        if: matrix.platform == 'windows'
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+      - name: Record toolchain and runner
+        run: |
+          hostname
+          cmake --version
+          git --version
+      - name: Generate headers with C++20
+        env:
+          PILOT_GENERATOR: ${{ matrix.generator }}
+        run: |
+          set -euo pipefail
+          for build_type in Debug Release; do
+            preset=generator-build
+            if [ "$build_type" = Release ]; then
+              preset=generator-run
+            fi
+            cmake -S . -B build --fresh --preset "$preset" \
+              -G "$PILOT_GENERATOR" -D CMAKE_BUILD_TYPE="$build_type"
+            cmake --build build --parallel 2 --config "$build_type" --clean-first
+          done
+      - name: Compile tests with C++17 and C++20
+        env:
+          PILOT_GENERATOR: ${{ matrix.generator }}
+        run: |
+          set -euo pipefail
+          for standard in 17 20; do
+            for build_type in Debug Release; do
+              cmake -S . -B build --fresh --preset tests \
+                -G "$PILOT_GENERATOR" \
+                -D VULKAN_HPP_BUILD_CXX_MODULE=OFF \
+                -D CMAKE_CXX_STANDARD="$standard" \
+                -D CMAKE_BUILD_TYPE="$build_type"
+              cmake --build build --parallel 2 --config "$build_type" --clean-first
+              ctest --parallel 2 --output-on-failure --no-tests=error \
+                --test-dir build -C "$build_type"
+            done
+          done
+      - name: Retain CTest diagnostics before VM deletion
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vulkan-hpp-pilot-${{ matrix.platform }}-${{ github.run_attempt }}
+          path: build/Testing/Temporary/
+          if-no-files-found: ignore
+          retention-days: 7
